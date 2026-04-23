@@ -1,22 +1,21 @@
 /*
 controllers/user/userController.js
-Using Sequelize Models instead of raw SQL
+Updated: role => role_id + Role association
 */
 
 const bcrypt = require("bcrypt");
 const { Op } = require("sequelize");
-const { User } = require("../../models");
+const { User, Role } = require("../../models");
 
 /* GET USERS */
 exports.getUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, role, search, is_active } = req.query;
+    const { page = 1, limit = 20, role_id, search, is_active } = req.query;
 
     const offset = (page - 1) * limit;
-
     let where = {};
 
-    if (role) where.role = role;
+    if (role_id) where.role_id = role_id;
 
     if (search) {
       where[Op.or] = [
@@ -25,8 +24,9 @@ exports.getUsers = async (req, res) => {
       ];
     }
 
-    if (is_active !== undefined)
+    if (is_active !== undefined) {
       where.is_active = is_active === "1" || is_active === "true";
+    }
 
     const { count, rows } = await User.findAndCountAll({
       where,
@@ -35,12 +35,19 @@ exports.getUsers = async (req, res) => {
         "name",
         "email",
         "phone",
-        "role",
+        "role_id",
         "is_active",
         "is_verified",
         "kyc_status",
         "last_login",
         "created_at",
+      ],
+      include: [
+        {
+          model: Role,
+          as: "role",
+          attributes: ["id", "name", "slug"],
+        },
       ],
       order: [["created_at", "DESC"]],
       limit: parseInt(limit),
@@ -70,7 +77,7 @@ exports.getUserById = async (req, res) => {
       "name",
       "email",
       "phone",
-      "role",
+      "role_id",
       "is_active",
       "is_verified",
       "kyc_status",
@@ -78,13 +85,21 @@ exports.getUserById = async (req, res) => {
       "last_login",
       "created_at",
     ],
+    include: [
+      {
+        model: Role,
+        as: "role",
+        attributes: ["id", "name", "slug"],
+      },
+    ],
   });
 
-  if (!user)
+  if (!user) {
     return res.status(404).json({
       success: false,
       message: "User not found",
     });
+  }
 
   return res.json({
     success: true,
@@ -95,23 +110,23 @@ exports.getUserById = async (req, res) => {
 /* CREATE USER */
 exports.createUser = async (req, res) => {
   try {
-    const { name, email, phone, password, role = "user" } = req.body;
+    const { name, email, phone, password, role_id } = req.body;
 
-    if (!name || !email || !password)
+    if (!name || !email || !password || !role_id) {
       return res.status(400).json({
         success: false,
-        message: "name, email, password required",
+        message: "name, email, password, role_id required",
       });
+    }
 
-    const exists = await User.findOne({
-      where: { email },
-    });
+    const exists = await User.findOne({ where: { email } });
 
-    if (exists)
+    if (exists) {
       return res.status(409).json({
         success: false,
         message: "Email already exists",
       });
+    }
 
     const hash = await bcrypt.hash(password, 10);
 
@@ -120,7 +135,7 @@ exports.createUser = async (req, res) => {
       email,
       phone,
       password_hash: hash,
-      role,
+      role_id,
       is_active: true,
       is_verified: true,
     });
@@ -143,18 +158,19 @@ exports.updateUser = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
 
-    if (!user)
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
       });
+    }
 
-    const { name, phone, role, is_active, is_verified } = req.body;
+    const { name, phone, role_id, is_active, is_verified } = req.body;
 
     await user.update({
       name,
       phone,
-      role,
+      role_id,
       is_active,
       is_verified,
     });
@@ -173,19 +189,21 @@ exports.updateUser = async (req, res) => {
 
 /* DELETE USER */
 exports.deleteUser = async (req, res) => {
-  if (+req.params.id === req.user.id)
+  if (+req.params.id === req.user.id) {
     return res.status(400).json({
       success: false,
       message: "Cannot delete yourself",
     });
+  }
 
   const user = await User.findByPk(req.params.id);
 
-  if (!user)
+  if (!user) {
     return res.status(404).json({
       success: false,
       message: "User not found",
     });
+  }
 
   user.is_active = false;
   await user.save();
@@ -200,19 +218,21 @@ exports.deleteUser = async (req, res) => {
 exports.updateKyc = async (req, res) => {
   const { kyc_status } = req.body;
 
-  if (!["approved", "rejected"].includes(kyc_status))
+  if (!["approved", "rejected"].includes(kyc_status)) {
     return res.status(400).json({
       success: false,
       message: "Invalid KYC status",
     });
+  }
 
   const user = await User.findByPk(req.params.id);
 
-  if (!user)
+  if (!user) {
     return res.status(404).json({
       success: false,
       message: "User not found",
     });
+  }
 
   await user.update({
     kyc_status,
@@ -229,18 +249,6 @@ exports.updateKyc = async (req, res) => {
 exports.getStats = async (req, res) => {
   const total = await User.count();
 
-  const users = await User.count({
-    where: { role: "user" },
-  });
-
-  const organizers = await User.count({
-    where: { role: "organizer" },
-  });
-
-  const admins = await User.count({
-    where: { role: "admin" },
-  });
-
   const active = await User.count({
     where: { is_active: true },
   });
@@ -251,21 +259,30 @@ exports.getStats = async (req, res) => {
 
   const pending_kyc = await User.count({
     where: {
-      role: "organizer",
       kyc_status: "pending",
     },
   });
+
+  const roles = await Role.findAll({
+    attributes: ["id", "name"],
+  });
+
+  let roleStats = {};
+
+  for (const role of roles) {
+    roleStats[role.name] = await User.count({
+      where: { role_id: role.id },
+    });
+  }
 
   return res.json({
     success: true,
     data: {
       total,
-      users,
-      organizers,
-      admins,
       active,
       inactive,
       pending_kyc,
+      roles: roleStats,
     },
   });
 };

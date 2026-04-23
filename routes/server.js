@@ -41,4 +41,7 @@ router.use("/wishlists", require("./wishlist/wishlistRoutes"));
 /* Admin */
 router.use("/admin", require("./admin/adminRoutes"));
 
+/* Roles */
+router.use("/role", require("./role/roleRoutes"));
+
 module.exports = router;

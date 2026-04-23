@@ -1,6 +1,6 @@
 /*
 controllers/auth/authController.js
-Using Sequelize Models instead of raw SQL
+Using Sequelize Models
 */
 
 const bcrypt = require("bcrypt");
@@ -8,22 +8,40 @@ const jwt = require("jsonwebtoken");
 
 const { User, RefreshToken } = require("../../models");
 
-const signAccess = (id, role) =>
-  jwt.sign({ id, role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "24h",
-  });
+/* =========================
+   TOKEN HELPERS
+========================= */
 
-const signRefresh = (id) =>
-  jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
+const signAccess = (user) => {
+  return jwt.sign(
+    {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      avatar_url: user.avatar_url,
+      is_active: user.is_active,
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.JWT_EXPIRES_IN || "24h",
+    },
+  );
+};
+
+const signRefresh = (id) => {
+  return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
   });
+};
 
-/* REGISTER */
-// controllers/auth/authController.js
+/* =========================
+   REGISTER
+========================= */
 
 exports.register = async (req, res) => {
   try {
-    // body exists?
     if (!req.body) {
       return res.status(400).json({
         success: false,
@@ -33,18 +51,17 @@ exports.register = async (req, res) => {
 
     const { name, email, password, phone } = req.body;
 
-    // validations
     if (!name || name.trim() === "") {
       return res.status(400).json({
         success: false,
-        message: "name is required",
+        message: "Name is required",
       });
     }
 
     if (!email || email.trim() === "") {
       return res.status(400).json({
         success: false,
-        message: "email is required",
+        message: "Email is required",
       });
     }
 
@@ -55,9 +72,10 @@ exports.register = async (req, res) => {
       });
     }
 
-    // check existing user
     const exists = await User.findOne({
-      where: { email: email.toLowerCase().trim() },
+      where: {
+        email: email.toLowerCase().trim(),
+      },
     });
 
     if (exists) {
@@ -67,10 +85,8 @@ exports.register = async (req, res) => {
       });
     }
 
-    // hash password
     const hash = await bcrypt.hash(password, 10);
 
-    // create user
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -91,7 +107,7 @@ exports.register = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Register Error:", error);
+    console.log("Register Error:", error);
 
     return res.status(500).json({
       success: false,
@@ -100,21 +116,20 @@ exports.register = async (req, res) => {
   }
 };
 
-/* LOGIN */
+/* =========================
+   LOGIN
+========================= */
+
 exports.login = async (req, res) => {
   try {
-    // console.log()
-
     const { email, password } = req.body;
-    console.log("Login hit");
-    console.log("wmail:", email);
-    console.log("password:", password);
 
-    if (!email || !password)
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
         message: "Email and password required",
       });
+    }
 
     const user = await User.findOne({
       where: {
@@ -122,32 +137,33 @@ exports.login = async (req, res) => {
         is_active: true,
       },
     });
-    console.log("User found:", user);
 
-    if (!user)
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
+    }
 
     const valid = await bcrypt.compare(password, user.password_hash);
 
-    if (!valid)
+    if (!valid) {
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
+    }
 
-    if (!["super_admin", "admin"].includes(user.role))
+    if (!["super_admin", "admin"].includes(user.role)) {
       return res.status(403).json({
         success: false,
         message: "Admin access only",
       });
+    }
 
-    const accessToken = signAccess(user.id, user.role);
-    console.log(accessToken);
+    const accessToken = signAccess(user);
     const refreshToken = signRefresh(user.id);
-    console.log("Refresh token:", refreshToken);
+
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await RefreshToken.create({
@@ -174,6 +190,8 @@ exports.login = async (req, res) => {
       },
     });
   } catch (error) {
+    console.log("Login Error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -181,16 +199,20 @@ exports.login = async (req, res) => {
   }
 };
 
-/* REFRESH TOKEN */
+/* =========================
+   REFRESH TOKEN
+========================= */
+
 exports.refresh = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
-    if (!refreshToken)
+    if (!refreshToken) {
       return res.status(400).json({
         success: false,
         message: "Refresh token required",
       });
+    }
 
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
@@ -201,25 +223,29 @@ exports.refresh = async (req, res) => {
       },
     });
 
-    if (!tokenRow)
+    if (!tokenRow) {
       return res.status(401).json({
         success: false,
         message: "Invalid refresh token",
       });
+    }
 
     const user = await User.findByPk(decoded.id);
 
-    if (!user)
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: "User not found",
       });
+    }
 
-    const accessToken = signAccess(user.id, user.role);
+    const accessToken = signAccess(user);
 
     return res.json({
       success: true,
-      data: { accessToken },
+      data: {
+        accessToken,
+      },
     });
   } catch (error) {
     return res.status(401).json({
@@ -229,14 +255,19 @@ exports.refresh = async (req, res) => {
   }
 };
 
-/* LOGOUT */
+/* =========================
+   LOGOUT
+========================= */
+
 exports.logout = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
     if (refreshToken) {
       await RefreshToken.destroy({
-        where: { token: refreshToken },
+        where: {
+          token: refreshToken,
+        },
       });
     }
 
@@ -252,41 +283,69 @@ exports.logout = async (req, res) => {
   }
 };
 
-/* ME */
-exports.me = async (req, res) => {
-  const user = await User.findByPk(req.user.id, {
-    attributes: [
-      "id",
-      "name",
-      "email",
-      "phone",
-      "role",
-      "avatar_url",
-      "last_login",
-      "created_at",
-    ],
-  });
+/* =========================
+   ME
+========================= */
 
-  return res.json({
-    success: true,
-    data: user,
-  });
+exports.me = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: [
+        "id",
+        "name",
+        "email",
+        "phone",
+        "role",
+        "avatar_url",
+        "last_login",
+        "created_at",
+      ],
+    });
+
+    return res.json({
+      success: true,
+      data: user,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
 };
 
-/* CHANGE PASSWORD */
+/* =========================
+   CHANGE PASSWORD
+========================= */
+
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Both passwords are required",
+      });
+    }
+
     const user = await User.findByPk(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
     const valid = await bcrypt.compare(currentPassword, user.password_hash);
 
-    if (!valid)
+    if (!valid) {
       return res.status(400).json({
         success: false,
         message: "Current password incorrect",
       });
+    }
 
     const hash = await bcrypt.hash(newPassword, 10);
 

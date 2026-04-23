@@ -19,6 +19,7 @@ const Banner = require("./banner/BannerModel");
 const Notification = require("./notification/NotificationModel");
 const Wishlist = require("./whishlist/WhishListModel");
 const RefreshToken = require("./refreshToken/RefreshTokenModel");
+const Role = require("./role/RoleModel");
 
 /* ===============================
    USER RELATIONS
@@ -164,6 +165,17 @@ Event.belongsToMany(User, {
   as: "wishlistedUsers",
 });
 
+Role.hasMany(User, {
+  foreignKey: "role_id",
+  as: "users",
+});
+
+/* One User -> One Role */
+// User.belongsTo(Role, {
+//   foreignKey: "role_id",
+//   as: "role",
+// });
+
 /* ===============================
    EXPORTS
 =============================== */
@@ -171,6 +183,7 @@ Event.belongsToMany(User, {
 module.exports = {
   sequelize,
   User,
+  Role,
   Category,
   Hall,
   HallSection,
