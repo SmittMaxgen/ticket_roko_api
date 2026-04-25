@@ -30,25 +30,25 @@ exports.getUsers = async (req, res) => {
 
     const { count, rows } = await User.findAndCountAll({
       where,
-      attributes: [
-        "id",
-        "name",
-        "email",
-        "phone",
-        "role_id",
-        "is_active",
-        "is_verified",
-        "kyc_status",
-        "last_login",
-        "created_at",
-      ],
-      include: [
-        {
-          model: Role,
-          as: "role",
-          attributes: ["id", "name", "slug"],
-        },
-      ],
+      // attributes: [
+      //   "id",
+      //   "name",
+      //   "email",
+      //   "phone",
+      //   "role_id",
+      //   "is_active",
+      //   "is_verified",
+      //   "kyc_status",
+      //   "last_login",
+      //   "created_at",
+      // ],
+      // include: [
+      //   {
+      //     model: Role,
+      //     as: "role",
+      //     attributes: ["id", "name", "slug"],
+      //   },
+      // ],
       order: [["created_at", "DESC"]],
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -62,6 +62,7 @@ exports.getUsers = async (req, res) => {
       limit: +limit,
     });
   } catch (error) {
+    console.log("error::::>>>>>>", error);
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -112,7 +113,7 @@ exports.createUser = async (req, res) => {
   try {
     const { name, email, phone, password, role_id } = req.body;
 
-    if (!name || !email || !password || !role_id) {
+    if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
         message: "name, email, password, role_id required",

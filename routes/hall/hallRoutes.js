@@ -1,21 +1,22 @@
-// routes/adminHallRoutes.js
+const express = require("express");
+const router = express.Router();
 
-const router = require("express").Router();
-const controller = require("../../controllers/hall/hallController");
-// const { auth, adminOnly } = require("../middleware/auth");
+const ctrl = require("../../controllers/hall/hallController");
 
-const auth = require("../../middleware/auth");
-const role = require("../../middleware/role");
-const adminOnly = role("super_admin", "admin");
-router.use(auth, adminOnly);
+const verifyToken = require("../../middleware/auth");
+const adminOnly = require("../../middleware/role")("super_admin", "admin");
 
-router.get("/", controller.getAllHalls);
-router.get("/:id", controller.getHallById);
+// Routes
+router.get("/stats", verifyToken, adminOnly, ctrl.getHallStats);
 
-router.post("/", controller.createHall);
+router.get("/", verifyToken, adminOnly, ctrl.getAllHalls);
 
-router.put("/:id", controller.updateHall);
+router.get("/:id", verifyToken, ctrl.getHallById);
 
-router.delete("/:id", controller.deleteHall);
+router.post("/", verifyToken, adminOnly, ctrl.createHall);
+
+router.put("/:id", verifyToken, adminOnly, ctrl.updateHall);
+
+router.delete("/:id", verifyToken, adminOnly, ctrl.deleteHall);
 
 module.exports = router;
