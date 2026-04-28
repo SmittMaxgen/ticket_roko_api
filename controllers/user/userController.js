@@ -166,11 +166,12 @@ exports.updateUser = async (req, res) => {
       });
     }
 
-    const { name, phone, role_id, is_active, is_verified } = req.body;
+    const { name, phone, role_id, is_active, is_verified, role } = req.body;
 
     await user.update({
       name,
       phone,
+      role,
       role_id,
       is_active,
       is_verified,

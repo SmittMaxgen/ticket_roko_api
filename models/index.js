@@ -220,7 +220,7 @@ Hall.belongsTo(User, { foreignKey: "created_by", as: "creator" });
 User.hasMany(Event, { foreignKey: "organizer_id", as: "organizedEvents" });
 Event.belongsTo(User, { foreignKey: "organizer_id", as: "organizer" });
 User.hasMany(Booking, { foreignKey: "user_id" });
-Booking.belongsTo(User, { foreignKey: "user_id" });
+Booking.belongsTo(User, { foreignKey: "user_id", as: "user" });
 User.hasMany(RefreshToken, { foreignKey: "user_id", onDelete: "CASCADE" });
 RefreshToken.belongsTo(User, { foreignKey: "user_id" });
 
@@ -238,7 +238,7 @@ Event.belongsTo(Hall, { foreignKey: "hall_id" });
 
 // ── Event / Booking ──────────────────────────────────────
 Event.hasMany(Booking, { foreignKey: "event_id" });
-Booking.belongsTo(Event, { foreignKey: "event_id" });
+Booking.belongsTo(Event, { foreignKey: "event_id", as: "event" });
 Booking.hasMany(BookingSeat, { foreignKey: "booking_id" });
 BookingSeat.belongsTo(Booking, { foreignKey: "booking_id" });
 Event.hasMany(BookingSeat, { foreignKey: "event_id" });

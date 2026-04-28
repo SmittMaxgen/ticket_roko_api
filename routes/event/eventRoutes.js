@@ -16,11 +16,16 @@ const {
   cancelEvent,
   deleteEvent,
   getSummaryStats,
+  getBookingLayout,
+  getEventBookings,
 } = require("../../controllers/event/eventController");
 
 /* PUBLIC / BASIC */
 router.get("/", getAllEvents);
 router.get("/:id", getEventById);
+
+router.get("/:id/booking-layout", getBookingLayout);
+router.get("/:id/bookings", getEventBookings);
 
 /* ADMIN */
 router.post("/", auth, adminOnly, createEvent);

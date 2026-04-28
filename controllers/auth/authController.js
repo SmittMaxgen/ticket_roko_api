@@ -92,7 +92,7 @@ exports.register = async (req, res) => {
       email: email.toLowerCase().trim(),
       phone: phone || null,
       password_hash: hash,
-      role: "super_admin",
+      role: "user",
       is_active: true,
     });
 
@@ -154,12 +154,12 @@ exports.login = async (req, res) => {
       });
     }
 
-    if (!["super_admin", "admin"].includes(user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: "Admin access only",
-      });
-    }
+    // if (!["super_admin", "admin"].includes(user.role)) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: "Admin access only",
+    //   });
+    // }
 
     const accessToken = signAccess(user);
     const refreshToken = signRefresh(user.id);
