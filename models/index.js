@@ -233,9 +233,17 @@ Hall.hasMany(Seat, { foreignKey: "hall_id", as: "seats", onDelete: "CASCADE" });
 Seat.belongsTo(Hall, { foreignKey: "hall_id", as: "hall" });
 
 // ── Hall → Event ─────────────────────────────────────────
-Hall.hasMany(Event, { foreignKey: "hall_id" });
-Event.belongsTo(Hall, { foreignKey: "hall_id" });
+// Hall.hasMany(Event, { foreignKey: "hall_id" });
 
+// Event.belongsTo(Hall, { foreignKey: "hall_id" });
+Hall.hasMany(Event, {
+  foreignKey: "hall_id",
+  as: "events",
+});
+Event.belongsTo(Hall, {
+  foreignKey: "hall_id",
+  as: "hall",
+});
 // ── Event / Booking ──────────────────────────────────────
 Event.hasMany(Booking, { foreignKey: "event_id" });
 Booking.belongsTo(Event, { foreignKey: "event_id", as: "event" });

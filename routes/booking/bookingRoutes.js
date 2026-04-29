@@ -11,7 +11,7 @@ const adminOnly = role("super_admin", "admin");
 
 router.post("/create", auth, controller.createBooking);
 router.get("/my-bookings", controller.getMyBookings);
-router.get("/:id", controller.getBookingById);
+router.get("/:id", auth, controller.getBookingById);
 router.get("/", controller.getAllBookings);
 
 router.get("/stats/summary", controller.getBookingStats);

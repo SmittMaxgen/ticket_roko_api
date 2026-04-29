@@ -8,7 +8,7 @@ const BookingSeat = require("../../models/booking/BookingSeatModel");
 const HallSeat = require("../../models/hall/HallSeatModel");
 const HallRow = require("../../models/hall/HallRowModel");
 const HallSection = require("../../models/hall/HallSectionsModel");
-const { sequelize, Seat } = require("../../models");
+const { sequelize, Seat, Hall } = require("../../models");
 
 const bookingInclude = [
   {
@@ -309,52 +309,140 @@ exports.getAllBookings = async (req, res) => {
 //   }
 // };
 
+// exports.getBookingById = async (req, res) => {
+//   try {
+//     const booking = await Booking.findOne({
+//       where: {
+//         id: req.params.id,
+//         user_id: req.user.id,
+//       },
+//       include: [
+//         {
+//           model: Event,
+//           as: "event",
+//         },
+//       ],
+//     });
+
+//     if (!booking) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Booking not found",
+//       });
+//     }
+
+//     const seats = await BookingSeat.findAll({
+//       where: { booking_id: booking.id },
+//       include: [
+//         {
+//           model: Seat,
+//           as: "seat",
+//         },
+//       ],
+//     });
+
+//     return res.json({
+//       success: true,
+//       data: {
+//         ...booking.toJSON(),
+//         seats,
+//       },
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed",
+//     });
+//   }
+// };
 exports.getBookingById = async (req, res) => {
   try {
+    const bookingId = req.params.id;
+    const userId = req.user?.id;
+
+    console.log("=== getBookingById Debug ===");
+    console.log("Booking ID:", bookingId);
+    console.log("User ID:", userId);
+
+    if (!bookingId || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request",
+      });
+    }
+
     const booking = await Booking.findOne({
       where: {
-        id: req.params.id,
-        user_id: req.user.id,
+        id: bookingId,
+        user_id: userId,
       },
       include: [
         {
           model: Event,
           as: "event",
+          include: [
+            {
+              model: Hall,
+              as: "hall",
+              attributes: ["id", "name", "city", "address"],
+            },
+          ],
         },
       ],
+      attributes: {
+        exclude: ["createdAt", "updatedAt"],
+      },
     });
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: "Booking not found",
+        message: "Booking not found or you don't have access",
       });
     }
 
-    const seats = await BookingSeat.findAll({
+    // Fixed: Use correct column names from your seats table
+    const bookingSeats = await BookingSeat.findAll({
       where: { booking_id: booking.id },
       include: [
         {
           model: Seat,
           as: "seat",
+          // attributes: [
+          //   "id",
+          //   // "seat_no", // ← Most common in Indian projects
+          //   // "row_no", // ← Most common
+          //   // "price",
+          //   // "section_name", // remove if not exist
+          // ],
         },
       ],
+      attributes: ["id", "price", "status"],
     });
+
+    const responseData = {
+      ...booking.toJSON(),
+      seats: bookingSeats.map((bs) => ({
+        bookingSeatId: bs.id,
+        ...bs.seat?.toJSON(),
+        bookedPrice: bs.price || bs.seat?.price,
+      })),
+    };
 
     return res.json({
       success: true,
-      data: {
-        ...booking.toJSON(),
-        seats,
-      },
+      data: responseData,
     });
   } catch (error) {
+    console.error("Error in getBookingById:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed",
+      message: "Failed to fetch booking details",
+      ...(process.env.NODE_ENV === "development" && { error: error.message }),
     });
   }
 };
+
 // PATCH /api/bookings/:id/cancel
 // exports.cancelBooking = async (req, res) => {
 //   try {

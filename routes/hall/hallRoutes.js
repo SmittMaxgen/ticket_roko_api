@@ -9,7 +9,7 @@ const adminOnly = require("../../middleware/role")("super_admin", "admin");
 // Routes
 router.get("/stats", verifyToken, adminOnly, ctrl.getHallStats);
 
-router.get("/", verifyToken, adminOnly, ctrl.getAllHalls);
+router.get("/", verifyToken, ctrl.getAllHalls);
 
 router.get("/:id", verifyToken, ctrl.getHallById);
 
