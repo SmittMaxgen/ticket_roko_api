@@ -482,6 +482,57 @@ const baseInclude = [
 // ─────────────────────────────────────────────
 // GET /api/events
 // ─────────────────────────────────────────────
+// exports.getAllEvents = async (req, res) => {
+//   try {
+//     let { page = 1, limit = 20, status, search, category_id } = req.query;
+
+//     page = Number(page);
+//     limit = Number(limit);
+
+//     const offset = (page - 1) * limit;
+
+//     const where = {};
+
+//     if (status) where.status = status;
+
+//     if (category_id) where.category_id = Number(category_id);
+
+//     if (search) {
+//       where.title = {
+//         [Op.like]: `%${search.trim()}%`,
+//       };
+//     }
+
+//     const { rows, count } = await Event.findAndCountAll({
+//       where,
+//       include: baseInclude,
+//       as: "events",
+//       order: [["created_at", "DESC"]],
+//       limit,
+//       offset,
+//       distinct: true,
+//     });
+
+//     return res.json({
+//       success: true,
+//       data: rows,
+//       pagination: {
+//         total: count,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(count / limit),
+//       },
+//     });
+//   } catch (error) {
+//     console.error(error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 exports.getAllEvents = async (req, res) => {
   try {
     let { page = 1, limit = 20, status, search, category_id } = req.query;
@@ -494,7 +545,6 @@ exports.getAllEvents = async (req, res) => {
     const where = {};
 
     if (status) where.status = status;
-
     if (category_id) where.category_id = Number(category_id);
 
     if (search) {
@@ -505,7 +555,21 @@ exports.getAllEvents = async (req, res) => {
 
     const { rows, count } = await Event.findAndCountAll({
       where,
-      include: baseInclude,
+
+      include: [
+        {
+          model: Hall,
+          as: "hall",
+        },
+        {
+          model: Category,
+        },
+        {
+          model: User,
+          as: "organizer",
+        },
+      ],
+
       order: [["created_at", "DESC"]],
       limit,
       offset,
@@ -531,7 +595,6 @@ exports.getAllEvents = async (req, res) => {
     });
   }
 };
-
 // ─────────────────────────────────────────────
 // GET /api/events/:id
 // BASIC EVENT DETAIL
@@ -565,6 +628,130 @@ exports.getEventById = async (req, res) => {
 // ⭐ GET /api/events/:id/booking-layout
 // THIS IS WHAT YOU NEED FOR FRONTEND
 // ─────────────────────────────────────────────
+// exports.getBookingLayout = async (req, res) => {
+//   try {
+//     const eventId = req.params.id;
+
+//     const event = await Event.findByPk(eventId, {
+//       include: [
+//         {
+//           model: Hall,
+//           attributes: ["id", "name", "city"],
+//         },
+//       ],
+//     });
+
+//     if (!event) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Event not found",
+//       });
+//     }
+
+//     // All hall seats
+//     const seats = await Seat.findAll({
+//       where: {
+//         hall_id: event.hall_id,
+//         is_active: true,
+//       },
+//       order: [
+//         ["sort_order", "ASC"],
+//         ["id", "ASC"],
+//       ],
+//     });
+
+//     // Booked seats for this event only
+//     // const booked = await BookingSeat.findAll({
+//     //   where: {
+//     //     event_id: eventId,
+//     //     status: "booked",
+//     //   },
+//     //   attributes: ["seat_id"],
+//     // });
+
+//     const booked = await BookingSeat.findAll({
+//       where: {
+//         event_id: eventId,
+//       },
+//       include: [
+//         {
+//           model: Booking,
+//           attributes: ["id", "booking_ref", "status"],
+//           include: [
+//             {
+//               model: User,
+//               as: "user",
+//               attributes: ["id", "name", "email", "phone"],
+//             },
+//           ],
+//         },
+//       ],
+//     });
+//     const seatMap = new Map();
+
+//     booked.forEach((bs) => {
+//       if (!bs.Booking) return;
+
+//       seatMap.set(Number(bs.seat_id), {
+//         booking_id: bs.Booking.id,
+//         booking_ref: bs.Booking.booking_ref,
+//         status: bs.Booking.status,
+
+//         // 🔥 FIX HERE
+//         user: bs.Booking.user || null,
+//       });
+//     });
+//     const bookedSeatIds = booked.map((x) => Number(x.seat_id));
+
+//     // merge seat status
+//     // const finalSeats = seats.map((seat) => {
+//     //   const plain = seat.toJSON();
+
+//     //   return {
+//     //     ...plain,
+//     //     status: bookedSeatIds.includes(seat.id)
+//     //       ? "sold"
+//     //       : seat.is_space
+//     //         ? "space"
+//     //         : "available",
+//     //   };
+//     // });
+//     const finalSeats = seats.map((seat) => {
+//       const plain = seat.toJSON();
+
+//       const bookingInfo = seatMap.get(seat.id);
+
+//       return {
+//         ...plain,
+
+//         status: bookingInfo ? "sold" : seat.is_space ? "space" : "available",
+
+//         booking: bookingInfo || null,
+//       };
+//     });
+
+//     return res.json({
+//       success: true,
+//       data: {
+//         event,
+//         hall: event.Hall,
+//         seats: finalSeats,
+//         bookedSeatIds,
+//         totalSeats: finalSeats.filter((x) => !x.is_space).length,
+//         soldSeats: bookedSeatIds.length,
+//         availableSeats:
+//           finalSeats.filter((x) => !x.is_space).length - bookedSeatIds.length,
+//       },
+//     });
+//   } catch (error) {
+//     console.error(error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
 exports.getBookingLayout = async (req, res) => {
   try {
     const eventId = req.params.id;
@@ -573,6 +760,7 @@ exports.getBookingLayout = async (req, res) => {
       include: [
         {
           model: Hall,
+          as: "hall",
           attributes: ["id", "name", "city"],
         },
       ],
@@ -585,7 +773,6 @@ exports.getBookingLayout = async (req, res) => {
       });
     }
 
-    // All hall seats
     const seats = await Seat.findAll({
       where: {
         hall_id: event.hall_id,
@@ -597,15 +784,6 @@ exports.getBookingLayout = async (req, res) => {
       ],
     });
 
-    // Booked seats for this event only
-    // const booked = await BookingSeat.findAll({
-    //   where: {
-    //     event_id: eventId,
-    //     status: "booked",
-    //   },
-    //   attributes: ["seat_id"],
-    // });
-
     const booked = await BookingSeat.findAll({
       where: {
         event_id: eventId,
@@ -613,6 +791,7 @@ exports.getBookingLayout = async (req, res) => {
       include: [
         {
           model: Booking,
+          as: "Booking",
           attributes: ["id", "booking_ref", "status"],
           include: [
             {
@@ -624,6 +803,7 @@ exports.getBookingLayout = async (req, res) => {
         },
       ],
     });
+
     const seatMap = new Map();
 
     booked.forEach((bs) => {
@@ -633,36 +813,19 @@ exports.getBookingLayout = async (req, res) => {
         booking_id: bs.Booking.id,
         booking_ref: bs.Booking.booking_ref,
         status: bs.Booking.status,
-
-        // 🔥 FIX HERE
         user: bs.Booking.user || null,
       });
     });
+
     const bookedSeatIds = booked.map((x) => Number(x.seat_id));
 
-    // merge seat status
-    // const finalSeats = seats.map((seat) => {
-    //   const plain = seat.toJSON();
-
-    //   return {
-    //     ...plain,
-    //     status: bookedSeatIds.includes(seat.id)
-    //       ? "sold"
-    //       : seat.is_space
-    //         ? "space"
-    //         : "available",
-    //   };
-    // });
     const finalSeats = seats.map((seat) => {
       const plain = seat.toJSON();
-
       const bookingInfo = seatMap.get(seat.id);
 
       return {
         ...plain,
-
         status: bookingInfo ? "sold" : seat.is_space ? "space" : "available",
-
         booking: bookingInfo || null,
       };
     });
@@ -671,7 +834,7 @@ exports.getBookingLayout = async (req, res) => {
       success: true,
       data: {
         event,
-        hall: event.Hall,
+        hall: event.hall,
         seats: finalSeats,
         bookedSeatIds,
         totalSeats: finalSeats.filter((x) => !x.is_space).length,
