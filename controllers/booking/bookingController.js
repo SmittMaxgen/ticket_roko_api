@@ -374,7 +374,7 @@ exports.getBookingById = async (req, res) => {
     const booking = await Booking.findOne({
       where: {
         id: bookingId,
-        user_id: userId,
+        // user_id: userId,
       },
       include: [
         {
@@ -393,13 +393,14 @@ exports.getBookingById = async (req, res) => {
         exclude: ["createdAt", "updatedAt"],
       },
     });
+    console.log("booking::::::::::::>>>>>>>>>>", booking);
 
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Booking not found or you don't have access",
-      });
-    }
+    // if (!booking) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Booking not found or you don't have access",
+    //   });
+    // }
 
     // Fixed: Use correct column names from your seats table
     const bookingSeats = await BookingSeat.findAll({
@@ -419,7 +420,7 @@ exports.getBookingById = async (req, res) => {
       ],
       attributes: ["id", "price", "status"],
     });
-
+    console.log("booking ", bookingSeats);
     const responseData = {
       ...booking.toJSON(),
       seats: bookingSeats.map((bs) => ({
