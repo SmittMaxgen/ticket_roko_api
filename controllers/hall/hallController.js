@@ -494,12 +494,17 @@ exports.createHall = async (req, res) => {
 
 // ── UPDATE (basic info) ───────────────────────────────────
 exports.updateHall = async (req, res) => {
+  const t = await sequelize.transaction();
+
   try {
     const hall = await Hall.findByPk(req.params.id);
-    if (!hall)
+
+    if (!hall) {
+      await t.rollback();
       return res
         .status(404)
         .json({ success: false, message: "Hall not found" });
+    }
 
     const {
       name,
@@ -510,21 +515,72 @@ exports.updateHall = async (req, res) => {
       is_active,
       canvas_width,
       canvas_height,
+      seats = [],
     } = req.body;
-    await hall.update({
-      name,
-      description,
-      hall_type,
-      address,
-      city,
-      is_active,
-      canvas_width,
-      canvas_height,
+
+    // ── 1. Update hall metadata ─────────────────────────
+    await hall.update(
+      {
+        name,
+        description,
+        hall_type,
+        address,
+        city,
+        is_active,
+        canvas_width,
+        canvas_height,
+        total_rows: [
+          ...new Set(seats.filter((s) => !s.is_space).map((s) => s.row_label)),
+        ].length,
+        total_cols:
+          seats.length > 0
+            ? Math.max(...seats.map((s) => s.col_index || 0))
+            : 0,
+      },
+      { transaction: t },
+    );
+
+    // ── 2. Delete all existing seats for this hall ──────
+    await Seat.destroy({
+      where: { hall_id: hall.id },
+      transaction: t,
     });
 
-    return res.json({ success: true, message: "Hall updated" });
+    // ── 3. Bulk insert new seats ────────────────────────
+    if (seats.length > 0) {
+      await Seat.bulkCreate(
+        seats.map((seat) => ({
+          hall_id: hall.id,
+          seat_name: seat.seat_name,
+          row_label: seat.row_label || "",
+          col_index: seat.col_index || 0,
+          seat_type: seat.seat_type || "standard",
+          is_space: seat.is_space || false,
+          section_label: seat.section_label || null,
+          price: seat.price || 0,
+          x_pos: seat.x_pos || 0,
+          y_pos: seat.y_pos || 0,
+          fill: seat.fill || "#b2b2b2",
+          sort_order: seat.sort_order || 0,
+          is_active: true,
+        })),
+        { transaction: t },
+      );
+    }
+
+    await t.commit();
+
+    return res.json({
+      success: true,
+      message: "Hall updated successfully",
+      data: { id: hall.id, total_seats: seats.length },
+    });
   } catch (err) {
-    return res.status(500).json({ success: false, message: "Server error" });
+    await t.rollback();
+    console.error("updateHall error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: err.message || "Server error" });
   }
 };
 
