@@ -459,6 +459,8 @@ const Hall = require("../../models/hall/HallModel");
 const Seat = require("../../models/hall/HallSeatModel");
 const BookingSeat = require("../../models/booking/BookingSeatModel");
 const { Booking } = require("../../models");
+const EventSectionPrice = require("../../models/event/EventSectionPriceModel");
+const { sequelize } = require("../../config/db");
 
 // ─────────────────────────────────────────────
 // Reusable include
@@ -599,31 +601,51 @@ exports.getAllEvents = async (req, res) => {
 // GET /api/events/:id
 // BASIC EVENT DETAIL
 // ─────────────────────────────────────────────
+// exports.getEventById = async (req, res) => {
+//   try {
+//     const event = await Event.findByPk(req.params.id, {
+//       include: baseInclude,
+//     });
+
+//     if (!event) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Event not found",
+//       });
+//     }
+
+//     return res.json({
+//       success: true,
+//       data: event,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 exports.getEventById = async (req, res) => {
   try {
     const event = await Event.findByPk(req.params.id, {
-      include: baseInclude,
+      include: [
+        ...baseInclude,
+        { model: EventSectionPrice, as: "sectionPrices" },
+      ],
     });
 
     if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: "Event not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Event not found" });
     }
 
-    return res.json({
-      success: true,
-      data: event,
-    });
+    return res.json({ success: true, data: event });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // ─────────────────────────────────────────────
 // ⭐ GET /api/events/:id/booking-layout
 // THIS IS WHAT YOU NEED FOR FRONTEND
@@ -819,12 +841,36 @@ exports.getBookingLayout = async (req, res) => {
 
     const bookedSeatIds = booked.map((x) => Number(x.seat_id));
 
+    // const finalSeats = seats.map((seat) => {
+    //   const plain = seat.toJSON();
+    //   const bookingInfo = seatMap.get(seat.id);
+
+    //   return {
+    //     ...plain,
+    //     status: bookingInfo ? "sold" : seat.is_space ? "space" : "available",
+    //     booking: bookingInfo || null,
+    //   };
+    // });
+
+    // Fetch event-specific section prices
+    const sectionPriceRows = await EventSectionPrice.findAll({
+      where: { event_id: eventId },
+    });
+    const sectionPriceMap = {};
+    sectionPriceRows.forEach((sp) => {
+      sectionPriceMap[sp.section_label] = Number(sp.price);
+    });
+
     const finalSeats = seats.map((seat) => {
       const plain = seat.toJSON();
       const bookingInfo = seatMap.get(seat.id);
 
+      // Override price with event section price if set
+      const eventPrice = sectionPriceMap[plain.section_label];
+
       return {
         ...plain,
+        price: eventPrice !== undefined ? eventPrice : plain.price,
         status: bookingInfo ? "sold" : seat.is_space ? "space" : "available",
         booking: bookingInfo || null,
       };
@@ -869,7 +915,65 @@ exports.getEventBookings = async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/events
 // ─────────────────────────────────────────────
+// exports.createEvent = async (req, res) => {
+//   try {
+//     const {
+//       organizer_id,
+//       hall_id,
+//       category_id,
+//       title,
+//       description,
+//       event_date,
+//       start_time,
+//       end_time,
+//       city,
+//       address,
+//       ticket_price = 0,
+//       total_tickets = 0,
+//       is_free = false,
+//     } = req.body;
+
+//     const slug =
+//       title
+//         .toLowerCase()
+//         .trim()
+//         .replace(/\s+/g, "-")
+//         .replace(/[^a-z0-9-]/g, "") +
+//       "-" +
+//       Date.now();
+
+//     const event = await Event.create({
+//       organizer_id: req.user?.id || organizer_id,
+//       hall_id,
+//       category_id,
+//       title,
+//       slug,
+//       description,
+//       event_date,
+//       start_time,
+//       end_time,
+//       city,
+//       address,
+//       ticket_price,
+//       total_tickets,
+//       is_free,
+//       status: "approved",
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Event created",
+//       data: event,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
 exports.createEvent = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const {
       organizer_id,
@@ -885,6 +989,7 @@ exports.createEvent = async (req, res) => {
       ticket_price = 0,
       total_tickets = 0,
       is_free = false,
+      section_prices = [], // [{ section_label, price }]
     } = req.body;
 
     const slug =
@@ -896,65 +1001,114 @@ exports.createEvent = async (req, res) => {
       "-" +
       Date.now();
 
-    const event = await Event.create({
-      organizer_id: req.user?.id || organizer_id,
-      hall_id,
-      category_id,
-      title,
-      slug,
-      description,
-      event_date,
-      start_time,
-      end_time,
-      city,
-      address,
-      ticket_price,
-      total_tickets,
-      is_free,
-      status: "approved",
-    });
+    const event = await Event.create(
+      {
+        organizer_id: req.user?.id || organizer_id,
+        hall_id,
+        category_id,
+        title,
+        slug,
+        description,
+        event_date,
+        start_time,
+        end_time,
+        city,
+        address,
+        ticket_price,
+        total_tickets,
+        is_free,
+        status: "approved",
+      },
+      { transaction: t },
+    );
 
-    return res.status(201).json({
-      success: true,
-      message: "Event created",
-      data: event,
-    });
+    // Save per-section prices if provided
+    if (section_prices.length > 0) {
+      await EventSectionPrice.bulkCreate(
+        section_prices.map((sp) => ({
+          event_id: event.id,
+          section_label: sp.section_label,
+          price: Number(sp.price) || 0,
+        })),
+        { transaction: t },
+      );
+    }
+
+    await t.commit();
+    return res
+      .status(201)
+      .json({ success: true, message: "Event created", data: event });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    await t.rollback();
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // ─────────────────────────────────────────────
 // PUT /api/events/:id
 // ─────────────────────────────────────────────
+// exports.updateEvent = async (req, res) => {
+//   try {
+//     const event = await Event.findByPk(req.params.id);
+
+//     if (!event) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Event not found",
+//       });
+//     }
+
+//     await event.update(req.body);
+
+//     return res.json({
+//       success: true,
+//       message: "Event updated",
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 exports.updateEvent = async (req, res) => {
+  const t = await sequelize.transaction();
   try {
     const event = await Event.findByPk(req.params.id);
-
     if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: "Event not found",
-      });
+      await t.rollback();
+      return res
+        .status(404)
+        .json({ success: false, message: "Event not found" });
     }
 
-    await event.update(req.body);
+    const { section_prices = [], ...eventData } = req.body;
 
-    return res.json({
-      success: true,
-      message: "Event updated",
-    });
+    await event.update(eventData, { transaction: t });
+
+    // Update section prices — delete old, insert new
+    if (section_prices.length > 0) {
+      await EventSectionPrice.destroy({
+        where: { event_id: event.id },
+        transaction: t,
+      });
+      await EventSectionPrice.bulkCreate(
+        section_prices.map((sp) => ({
+          event_id: event.id,
+          section_label: sp.section_label,
+          price: Number(sp.price) || 0,
+        })),
+        { transaction: t },
+      );
+    }
+
+    await t.commit();
+    return res.json({ success: true, message: "Event updated" });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    await t.rollback();
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // ─────────────────────────────────────────────
 // PATCH /api/events/:id/approve
 // ─────────────────────────────────────────────

@@ -8,7 +8,7 @@ const BookingSeat = require("../../models/booking/BookingSeatModel");
 const HallSeat = require("../../models/hall/HallSeatModel");
 const HallRow = require("../../models/hall/HallRowModel");
 const HallSection = require("../../models/hall/HallSectionsModel");
-const { sequelize, Seat, Hall } = require("../../models");
+const { sequelize, Seat, Hall, EventSectionPrice } = require("../../models");
 
 const bookingInclude = [
   {
@@ -101,14 +101,36 @@ exports.createBooking = async (req, res) => {
       });
     }
 
+    // let subtotal = 0;
+
+    // for (const seat of seats) {
+    //   subtotal += Number(seat.price || event.ticket_price || 0);
+    // }
+
     let subtotal = 0;
 
     for (const seat of seats) {
-      subtotal += Number(seat.price || event.ticket_price || 0);
+      // 1. Check event-specific section price first
+      const sectionPrice = await EventSectionPrice.findOne({
+        where: {
+          event_id,
+          section_label: seat.section_label,
+        },
+        transaction: t,
+      });
+
+      // Priority: EventSectionPrice → seat.price → event.ticket_price
+      const seatPrice = Number(
+        sectionPrice?.price || seat.price || event.ticket_price || 0,
+      );
+
+      subtotal += seatPrice;
     }
 
-    const convenience_fee = Math.round(subtotal * 0.05);
-    const total_amount = subtotal + convenience_fee;
+    // const convenience_fee = Math.round(subtotal * 0.05);
+    // const total_amount = subtotal + convenience_fee;
+
+    const total_amount = subtotal;
 
     const booking = await Booking.create(
       {
@@ -117,7 +139,7 @@ exports.createBooking = async (req, res) => {
         user_id,
         total_seats: seat_ids.length,
         subtotal,
-        convenience_fee,
+        convenience_fee: 0,
         total_amount,
         payment_status: "paid",
         payment_method,
@@ -133,13 +155,34 @@ exports.createBooking = async (req, res) => {
       { transaction: t },
     );
 
+    // for (const seat of seats) {
+    //   await BookingSeat.create(
+    //     {
+    //       booking_id: booking.id,
+    //       seat_id: seat.id,
+    //       event_id,
+    //       price: seat.price || event.ticket_price || 0,
+    //       status: "booked",
+    //     },
+    //     { transaction: t },
+    //   );
+    // }
     for (const seat of seats) {
+      const sectionPrice = await EventSectionPrice.findOne({
+        where: { event_id, section_label: seat.section_label },
+        transaction: t,
+      });
+
+      const seatPrice = Number(
+        sectionPrice?.price || seat.price || event.ticket_price || 0,
+      );
+
       await BookingSeat.create(
         {
           booking_id: booking.id,
           seat_id: seat.id,
           event_id,
-          price: seat.price || event.ticket_price || 0,
+          price: seatPrice, // ← correct per-seat price
           status: "booked",
         },
         { transaction: t },
@@ -387,6 +430,11 @@ exports.getBookingById = async (req, res) => {
               attributes: ["id", "name", "city", "address"],
             },
           ],
+        },
+        {
+          model: User, // ← ADD THIS BLOCK
+          as: "user",
+          attributes: ["id", "name", "email", "phone"], // ← pick whatever fields you need
         },
       ],
       attributes: {

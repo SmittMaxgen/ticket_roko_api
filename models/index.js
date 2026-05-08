@@ -213,6 +213,7 @@ const Notification = require("./notification/NotificationModel");
 const Wishlist = require("./whishlist/WhishListModel");
 const RefreshToken = require("./refreshToken/RefreshTokenModel");
 const Role = require("./role/RoleModel");
+const EventSectionPrice = require("./event/EventSectionPriceModel");
 
 // ── User ─────────────────────────────────────────────────
 User.hasMany(Hall, { foreignKey: "created_by", as: "createdHalls" });
@@ -269,6 +270,14 @@ Event.belongsToMany(User, {
 });
 Role.hasMany(User, { foreignKey: "role_id", as: "users" });
 
+// ── Event Section Prices ─────────────────────────────────
+Event.hasMany(EventSectionPrice, {
+  foreignKey: "event_id",
+  as: "sectionPrices",
+  onDelete: "CASCADE",
+});
+EventSectionPrice.belongsTo(Event, { foreignKey: "event_id" });
+
 module.exports = {
   sequelize,
   User,
@@ -283,4 +292,5 @@ module.exports = {
   Notification,
   Wishlist,
   RefreshToken,
+  EventSectionPrice,
 };
