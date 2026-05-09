@@ -43,5 +43,6 @@ router.use("/admin", require("./admin/adminRoutes"));
 
 /* Roles */
 router.use("/role", require("./role/roleRoutes"));
+router.use("/vendor", require("./vendor/vendorRoutes"));
 
 module.exports = router;

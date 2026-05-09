@@ -5,7 +5,7 @@ Updated: role => role_id + Role association
 
 const bcrypt = require("bcrypt");
 const { Op } = require("sequelize");
-const { User, Role } = require("../../models");
+const { User, Role, Vendor } = require("../../models");
 
 /* GET USERS */
 exports.getUsers = async (req, res) => {
@@ -42,13 +42,17 @@ exports.getUsers = async (req, res) => {
       //   "last_login",
       //   "created_at",
       // ],
-      // include: [
-      //   {
-      //     model: Role,
-      //     as: "role",
-      //     attributes: ["id", "name", "slug"],
-      //   },
-      // ],
+      include: [
+        // {
+        //   model: Role,
+        //   as: "role",
+        //   attributes: ["id", "name", "slug"],
+        // },
+        {
+          model: Vendor,
+          as: "vendorProfile",
+        },
+      ],
       order: [["created_at", "DESC"]],
       limit: parseInt(limit),
       offset: parseInt(offset),

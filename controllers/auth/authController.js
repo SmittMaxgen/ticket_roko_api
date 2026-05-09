@@ -6,7 +6,7 @@ Using Sequelize Models
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const { User, RefreshToken } = require("../../models");
+const { User, RefreshToken, Vendor } = require("../../models");
 
 /* =========================
    TOKEN HELPERS
@@ -299,6 +299,12 @@ exports.me = async (req, res) => {
         "avatar_url",
         "last_login",
         "created_at",
+      ],
+      include: [
+        {
+          model: Vendor,
+          as: "vendorProfile",
+        },
       ],
     });
 
