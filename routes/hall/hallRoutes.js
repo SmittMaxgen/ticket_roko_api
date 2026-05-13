@@ -19,4 +19,6 @@ router.put("/:id", verifyToken, adminOnly, ctrl.updateHall);
 
 router.delete("/:id", verifyToken, adminOnly, ctrl.deleteHall);
 
+router.patch("/:hallId/seats/label", verifyToken, ctrl.updateSeatLabels);
+
 module.exports = router;

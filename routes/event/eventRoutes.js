@@ -19,12 +19,15 @@ const {
   getBookingLayout,
   getEventBookings,
 } = require("../../controllers/event/eventController");
+const { updateSeatLabels } = require("../../controllers/hall/hallController");
 
 /* PUBLIC / BASIC */
 router.get("/", getAllEvents);
 router.get("/:id", getEventById);
 
+// router.get("/:id/booking-layout", getBookingLayout);
 router.get("/:id/booking-layout", getBookingLayout);
+router.patch("/:hallId/seats/label", updateSeatLabels);
 router.get("/:id/bookings", getEventBookings);
 
 /* ADMIN */

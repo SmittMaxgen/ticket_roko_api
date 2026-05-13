@@ -619,3 +619,40 @@ exports.getHallStats = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
+// hallController.js — ADD this function
+exports.updateSeatLabels = async (req, res) => {
+  const { seat_ids, section_label } = req.body;
+  const { hallId } = req.params;
+
+  try {
+    const { Seat } = require("../../models");
+
+    await Seat.update(
+      { section_label },
+      { where: { id: seat_ids, hall_id: hallId } },
+    );
+
+    // Return updated seats so FE can reflect immediately
+    const updatedSeats = await Seat.findAll({
+      where: { id: seat_ids, hall_id: hallId },
+      attributes: [
+        "id",
+        "seat_name",
+        "row_label",
+        "section_label",
+        "fill",
+        "price",
+      ],
+    });
+
+    return res.json({
+      success: true,
+      section_label,
+      updated_count: updatedSeats.length,
+      seats: updatedSeats.map((s) => s.toJSON()),
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};

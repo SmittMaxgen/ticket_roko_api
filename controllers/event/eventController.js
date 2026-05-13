@@ -861,20 +861,73 @@ exports.getBookingLayout = async (req, res) => {
       sectionPriceMap[sp.section_label] = Number(sp.price);
     });
 
+    // const finalSeats = seats.map((seat) => {
+    //   const plain = seat.toJSON();
+    //   const bookingInfo = seatMap.get(seat.id);
+
+    //   // Override price with event section price if set
+    //   const eventPrice = sectionPriceMap[plain.section_label];
+
+    //   return {
+    //     ...plain,
+    //     price: eventPrice !== undefined ? eventPrice : plain.price,
+    //     status: bookingInfo ? "sold" : seat.is_space ? "space" : "available",
+    //     booking: bookingInfo || null,
+    //   };
+    // });
+
+    // return res.json({
+    //   success: true,
+    //   data: {
+    //     event,
+    //     hall: event.hall,
+    //     seats: finalSeats,
+    //     bookedSeatIds,
+    //     totalSeats: finalSeats.filter((x) => !x.is_space).length,
+    //     soldSeats: bookedSeatIds.length,
+    //     availableSeats:
+    //       finalSeats.filter((x) => !x.is_space).length - bookedSeatIds.length,
+    //   },
+    // });
+
     const finalSeats = seats.map((seat) => {
       const plain = seat.toJSON();
       const bookingInfo = seatMap.get(seat.id);
-
-      // Override price with event section price if set
       const eventPrice = sectionPriceMap[plain.section_label];
+
+      // Fix invalid fill colors (e.g. "#balcony")
+      const validFill = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(plain.fill)
+        ? plain.fill
+        : "#64748B";
 
       return {
         ...plain,
+        fill: validFill,
         price: eventPrice !== undefined ? eventPrice : plain.price,
         status: bookingInfo ? "sold" : seat.is_space ? "space" : "available",
         booking: bookingInfo || null,
       };
     });
+
+    // Build section summary from seats
+    const sectionSummary = {};
+    finalSeats
+      .filter((s) => !s.is_space)
+      .forEach((s) => {
+        const key = s.section_label || "General";
+        if (!sectionSummary[key]) {
+          sectionSummary[key] = {
+            label: key,
+            fill: s.fill,
+            total: 0,
+            available: 0,
+            sold: 0,
+          };
+        }
+        sectionSummary[key].total++;
+        if (s.status === "available") sectionSummary[key].available++;
+        if (s.status === "sold") sectionSummary[key].sold++;
+      });
 
     return res.json({
       success: true,
@@ -887,6 +940,7 @@ exports.getBookingLayout = async (req, res) => {
         soldSeats: bookedSeatIds.length,
         availableSeats:
           finalSeats.filter((x) => !x.is_space).length - bookedSeatIds.length,
+        sectionSummary: Object.values(sectionSummary),
       },
     });
   } catch (error) {

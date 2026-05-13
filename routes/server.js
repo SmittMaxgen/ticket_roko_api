@@ -43,6 +43,14 @@ router.use("/admin", require("./admin/adminRoutes"));
 
 /* Roles */
 router.use("/role", require("./role/roleRoutes"));
+
+/* Vendor */
 router.use("/vendor", require("./vendor/vendorRoutes"));
+
+/* Sections & Options */
+router.use("/sections", require("./optionsRoutes/optionsRoutes"));
+
+/* Draw Tools */
+router.use("/tools", require("./optionsRoutes/optionsRoutes"));
 
 module.exports = router;
