@@ -622,18 +622,27 @@ exports.getHallStats = async (req, res) => {
 
 // hallController.js — ADD this function
 exports.updateSeatLabels = async (req, res) => {
-  const { seat_ids, section_label } = req.body;
+  const { seat_ids, section_label, event_id } = req.body;
   const { hallId } = req.params;
 
   try {
-    const { Seat } = require("../../models");
+    const { Seat, EventSeatLabel } = require("../../models");
 
-    await Seat.update(
-      { section_label },
-      { where: { id: seat_ids, hall_id: hallId } },
-    );
+    if (event_id) {
+      // ── Event-specific label (upsert per seat) ──────────
+      await Promise.all(
+        seat_ids.map((seat_id) =>
+          EventSeatLabel.upsert({ event_id, seat_id, label: section_label }),
+        ),
+      );
+    } else {
+      // ── Hall-level fallback (admin draw mode only) ──────
+      await Seat.update(
+        { section_label },
+        { where: { id: seat_ids, hall_id: hallId } },
+      );
+    }
 
-    // Return updated seats so FE can reflect immediately
     const updatedSeats = await Seat.findAll({
       where: { id: seat_ids, hall_id: hallId },
       attributes: [
@@ -649,6 +658,7 @@ exports.updateSeatLabels = async (req, res) => {
     return res.json({
       success: true,
       section_label,
+      event_id: event_id || null,
       updated_count: updatedSeats.length,
       seats: updatedSeats.map((s) => s.toJSON()),
     });

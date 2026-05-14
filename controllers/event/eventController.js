@@ -853,8 +853,19 @@ exports.getBookingLayout = async (req, res) => {
     // });
 
     // Fetch event-specific section prices
+    // Fetch event-specific section prices
     const sectionPriceRows = await EventSectionPrice.findAll({
       where: { event_id: eventId },
+    });
+
+    // Fetch event-specific seat labels
+    const { EventSeatLabel } = require("../../models");
+    const eventLabelRows = await EventSeatLabel.findAll({
+      where: { event_id: eventId },
+    });
+    const eventLabelMap = {};
+    eventLabelRows.forEach((el) => {
+      eventLabelMap[Number(el.seat_id)] = el.label;
     });
     const sectionPriceMap = {};
     sectionPriceRows.forEach((sp) => {
@@ -895,14 +906,18 @@ exports.getBookingLayout = async (req, res) => {
       const bookingInfo = seatMap.get(seat.id);
       const eventPrice = sectionPriceMap[plain.section_label];
 
-      // Fix invalid fill colors (e.g. "#balcony")
+      // Fix invalid fill colors
       const validFill = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(plain.fill)
         ? plain.fill
         : "#64748B";
 
+      // Event-specific label overrides hall-level section_label
+      const eventLabel = eventLabelMap[Number(plain.id)];
+
       return {
         ...plain,
         fill: validFill,
+        section_label: eventLabel || plain.section_label,
         price: eventPrice !== undefined ? eventPrice : plain.price,
         status: bookingInfo ? "sold" : seat.is_space ? "space" : "available",
         booking: bookingInfo || null,

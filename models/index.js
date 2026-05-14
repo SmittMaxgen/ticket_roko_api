@@ -214,6 +214,7 @@ const Wishlist = require("./whishlist/WhishListModel");
 const RefreshToken = require("./refreshToken/RefreshTokenModel");
 const Role = require("./role/RoleModel");
 const EventSectionPrice = require("./event/EventSectionPriceModel");
+const EventSeatLabel = require("./eventSeatLabel/EventSeatLabelModel");
 const Vendor = require("./vendor/VendorModel");
 
 // ── User ─────────────────────────────────────────────────
@@ -279,6 +280,17 @@ Event.hasMany(EventSectionPrice, {
 });
 EventSectionPrice.belongsTo(Event, { foreignKey: "event_id" });
 
+// User.hasOne(Vendor, {
+// ── Event Seat Labels (event-specific overrides) ──────
+Event.hasMany(EventSeatLabel, {
+  foreignKey: "event_id",
+  as: "seatLabels",
+  onDelete: "CASCADE",
+});
+EventSeatLabel.belongsTo(Event, { foreignKey: "event_id" });
+Seat.hasMany(EventSeatLabel, { foreignKey: "seat_id" });
+EventSeatLabel.belongsTo(Seat, { foreignKey: "seat_id" });
+
 User.hasOne(Vendor, {
   foreignKey: "user_id",
   as: "vendorProfile",
@@ -305,5 +317,6 @@ module.exports = {
   Wishlist,
   RefreshToken,
   EventSectionPrice,
+  EventSeatLabel,
   Vendor,
 };
