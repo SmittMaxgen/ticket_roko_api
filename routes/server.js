@@ -47,6 +47,13 @@ router.use("/role", require("./role/roleRoutes"));
 /* Vendor */
 router.use("/vendor", require("./vendor/vendorRoutes"));
 
+/* Party Plots */
+router.use("/party-plots", require("./partyPlot/partyPlotRoutes"));
+router.use(
+  "/party-plot-bookings",
+  require("./partyPlot/partyPlotBookingRoutes"),
+);
+
 /* Sections & Options */
 router.use("/sections", require("./optionsRoutes/optionsRoutes"));
 
