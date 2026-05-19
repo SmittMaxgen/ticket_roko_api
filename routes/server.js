@@ -60,4 +60,7 @@ router.use("/sections", require("./optionsRoutes/optionsRoutes"));
 /* Draw Tools */
 router.use("/tools", require("./optionsRoutes/optionsRoutes"));
 
+/* Labels */
+router.use("/labels", require("./label/labelRoutes"));
+
 module.exports = router;

@@ -26,6 +26,7 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const path = require("path");
 
 const router = require("./routes/server");
 const { connectDB } = require("./config/db");
@@ -41,7 +42,8 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json());
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 app.use("/api", router);
 
 (async () => {

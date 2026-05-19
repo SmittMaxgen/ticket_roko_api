@@ -64,7 +64,7 @@ const { Sequelize } = require("sequelize");
 const sequelize = new Sequelize("ticket_roko", "root", "root", {
   host: "localhost",
   dialect: "mysql",
-  logging: true,
+  logging: false,
 });
 
 async function connectDB() {
@@ -73,7 +73,7 @@ async function connectDB() {
     console.log("✅ Sequelize connected");
 
     // create / update tables automatically
-    await sequelize.sync({ alter: true });
+    await sequelize.sync({ alter: false });
   } catch (error) {
     console.log("❌ DB Error:", error.message);
   }
