@@ -18,11 +18,13 @@ const {
   getSummaryStats,
   getBookingLayout,
   getEventBookings,
+  getTrendingEvents,
 } = require("../../controllers/event/eventController");
 const { updateSeatLabels } = require("../../controllers/hall/hallController");
 
 /* PUBLIC / BASIC */
 router.get("/", getAllEvents);
+router.get("/trending", getTrendingEvents);
 router.get("/:id", getEventById);
 
 // router.get("/:id/booking-layout", getBookingLayout);

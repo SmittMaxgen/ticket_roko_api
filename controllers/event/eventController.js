@@ -597,6 +597,71 @@ exports.getAllEvents = async (req, res) => {
     });
   }
 };
+
+exports.getTrendingEvents = async (req, res) => {
+  try {
+    let { page = 1, limit = 10, category_id } = req.query;
+
+    page = Number(page);
+    limit = Number(limit);
+    const offset = (page - 1) * limit;
+
+    const where = {
+      is_trending: true,
+      status: "approved", // Only show approved trending events
+    };
+
+    if (category_id) {
+      where.category_id = Number(category_id);
+    }
+
+    const { rows, count } = await Event.findAndCountAll({
+      where,
+
+      include: [
+        {
+          model: Hall,
+          as: "hall",
+        },
+        {
+          model: Category,
+          attributes: ["id", "name"],
+        },
+        {
+          model: User,
+          as: "organizer",
+          attributes: ["id", "name", "email"],
+        },
+      ],
+
+      order: [
+        ["sold_tickets", "DESC"], // Optional: sort by popularity
+        ["event_date", "ASC"],
+      ],
+
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    return res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Get Trending Events Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 // ─────────────────────────────────────────────
 // GET /api/events/:id
 // BASIC EVENT DETAIL

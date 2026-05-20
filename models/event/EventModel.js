@@ -96,6 +96,18 @@ const Event = sequelize.define(
       defaultValue: false,
     },
 
+    is_trending: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false,
+    },
+
+    language: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: "English",
+    },
+
     status: {
       type: DataTypes.ENUM(
         "draft",
