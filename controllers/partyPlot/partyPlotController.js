@@ -91,18 +91,30 @@ exports.getPartyPlotById = async (req, res) => {
   }
 };
 // POST /api/party-plots
+const fileUrl = (req, file) =>
+  file
+    ? `${req.protocol}://${req.get("host")}/uploads/party-plots/${file.filename}`
+    : null;
+
 exports.createPartyPlot = async (req, res) => {
   try {
-    const { name, description, image, total_tickets } = req.body;
-
+    const { name, description, total_tickets } = req.body;
     const created_by = req.user.id;
+
+    // req.file is set by multer when an image is uploaded
+    // falls back to a URL string sent in body (image field) if no file
+    const image = req.file
+      ? fileUrl(req, req.file) // uploaded file  → full URL
+      : req.body.image || null; // URL string     → use as-is
+
+    const tickets = parseInt(total_tickets, 10) || 0;
 
     const partyPlot = await PartyPlot.create({
       name,
       description,
       image,
-      total_tickets,
-      available_tickets: total_tickets,
+      total_tickets: tickets,
+      available_tickets: tickets, // on creation all tickets are available
       created_by,
     });
 
@@ -111,8 +123,7 @@ exports.createPartyPlot = async (req, res) => {
       data: partyPlot,
     });
   } catch (error) {
-    console.error(error);
-
+    console.error("createPartyPlot error:", error);
     return res.status(500).json({
       success: false,
       message: "Server error",
