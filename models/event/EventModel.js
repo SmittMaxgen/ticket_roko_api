@@ -108,6 +108,12 @@ const Event = sequelize.define(
       defaultValue: "English",
     },
 
+    event_type: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: "Other",
+    },
+
     status: {
       type: DataTypes.ENUM(
         "draft",
