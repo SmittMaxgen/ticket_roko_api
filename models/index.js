@@ -405,6 +405,10 @@ const Vendor = require("./vendor/VendorModel");
 const PartyPlot = require("./partyPlot/PartyPlotModel");
 const PartyPlotTicket = require("./partyPlot/PartyPlotTicketModel");
 
+const EventTicketAssignment = require("./ticketChecker/EventTicketAssignmentModel");
+const PartyPlotTicketAssignment = require("./ticketChecker/PartyPlotTicketAssignmentModel");
+const EventTicketScan = require("./ticketChecker/EventTicketScanModel");
+
 // IMPORTANT
 // YOUR FILE MUST EXPORT A SEQUELIZE MODEL
 const PartyPlotBooking = require("./partyPlot/PartyPlotBookings");
@@ -682,6 +686,80 @@ PartyPlotBooking.hasMany(PartyPlotTicket, {
 });
 
 /* =========================================================
+   TICKET CHECKER ASSIGNMENTS
+========================================================= */
+
+User.hasMany(EventTicketAssignment, {
+  foreignKey: "user_id",
+  as: "eventTicketAssignments",
+});
+
+EventTicketAssignment.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "ticketChecker",
+});
+
+Event.hasMany(EventTicketAssignment, {
+  foreignKey: "event_id",
+  as: "ticketCheckerAssignments",
+});
+
+EventTicketAssignment.belongsTo(Event, {
+  foreignKey: "event_id",
+  as: "event",
+});
+
+User.hasMany(PartyPlotTicketAssignment, {
+  foreignKey: "user_id",
+  as: "partyPlotTicketAssignments",
+});
+
+PartyPlotTicketAssignment.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "ticketChecker",
+});
+
+PartyPlot.hasMany(PartyPlotTicketAssignment, {
+  foreignKey: "party_plot_id",
+  as: "ticketCheckerAssignments",
+});
+
+PartyPlotTicketAssignment.belongsTo(PartyPlot, {
+  foreignKey: "party_plot_id",
+  as: "partyPlot",
+});
+
+User.hasMany(EventTicketScan, {
+  foreignKey: "scanned_by",
+  as: "eventTicketScans",
+});
+
+EventTicketScan.belongsTo(User, {
+  foreignKey: "scanned_by",
+  as: "scanner",
+});
+
+Event.hasMany(EventTicketScan, {
+  foreignKey: "event_id",
+  as: "ticketScans",
+});
+
+EventTicketScan.belongsTo(Event, {
+  foreignKey: "event_id",
+  as: "event",
+});
+
+Booking.hasMany(EventTicketScan, {
+  foreignKey: "booking_id",
+  as: "ticketScans",
+});
+
+EventTicketScan.belongsTo(Booking, {
+  foreignKey: "booking_id",
+  as: "booking",
+});
+
+/* =========================================================
    EXPORTS
 ========================================================= */
 
@@ -713,4 +791,7 @@ module.exports = {
   PartyPlot,
   PartyPlotTicket,
   PartyPlotBooking,
+  EventTicketAssignment,
+  PartyPlotTicketAssignment,
+  EventTicketScan,
 };

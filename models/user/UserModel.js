@@ -42,6 +42,7 @@ const User = sequelize.define(
         "super_admin",
         "admin",
         "artist",
+        "ticket_checker",
         "user",
       ),
       defaultValue: "user",

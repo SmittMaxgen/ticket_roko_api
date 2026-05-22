@@ -76,6 +76,17 @@ const Event = sequelize.define(
       allowNull: true,
     },
 
+    background_image_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+
+    age_restriction: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: "U",
+    },
+
     ticket_price: {
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0.0,

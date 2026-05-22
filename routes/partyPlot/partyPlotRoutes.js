@@ -4,7 +4,9 @@ const router = express.Router();
 const ctrl = require("../../controllers/partyPlot/partyPlotController");
 
 const verifyToken = require("../../middleware/auth");
-const adminOnly = require("../../middleware/role")("super_admin", "admin");
+const role = require("../../middleware/role");
+const adminOnly = role("super_admin", "admin");
+const ticketCheckerAccess = role("super_admin", "admin", "ticket_checker");
 const { uploadTo } = require("../../middleware/partyplotUpload");
 // Routes
 router.get("/", ctrl.getAllPartyPlots);
@@ -39,6 +41,23 @@ router.delete("/:id", verifyToken, adminOnly, ctrl.deletePartyPlot);
 router.post("/:id/create-tickets", verifyToken, adminOnly, ctrl.createTickets);
 
 router.post("/:id/book-tickets", verifyToken, ctrl.bookTickets);
-
-router.post("/scan-ticket", verifyToken, adminOnly, ctrl.scanTicket);
+router.get(
+  "/assigned",
+  verifyToken,
+  ticketCheckerAccess,
+  ctrl.getAssignedPartyPlots,
+);
+router.post(
+  "/:id/assign-ticket-checker",
+  verifyToken,
+  adminOnly,
+  ctrl.assignTicketCheckerToPartyPlot,
+);
+router.delete(
+  "/:id/unassign-ticket-checker",
+  verifyToken,
+  adminOnly,
+  ctrl.unassignTicketCheckerFromPartyPlot,
+);
+router.post("/scan-ticket", verifyToken, ticketCheckerAccess, ctrl.scanTicket);
 module.exports = router;

@@ -459,6 +459,8 @@ const Hall = require("../../models/hall/HallModel");
 const Seat = require("../../models/hall/HallSeatModel");
 const BookingSeat = require("../../models/booking/BookingSeatModel");
 const { Booking } = require("../../models");
+const EventTicketAssignment = require("../../models/ticketChecker/EventTicketAssignmentModel");
+const EventTicketScan = require("../../models/ticketChecker/EventTicketScanModel");
 const EventSectionPrice = require("../../models/event/EventSectionPriceModel");
 const { sequelize } = require("../../config/db");
 
@@ -478,6 +480,7 @@ const baseInclude = [
   {
     model: Hall,
     attributes: ["id", "name", "city"],
+    as: "hall",
   },
 ];
 
@@ -711,6 +714,55 @@ exports.getEventById = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.getEventBySlug = async (req, res) => {
+  try {
+    const event = await Event.findOne({
+      where: {
+        slug: req.params.slug,
+      },
+
+      include: [
+        {
+          model: User,
+          as: "organizer",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name"],
+        },
+        {
+          model: Hall,
+          as: "hall",
+          attributes: ["id", "name", "city"],
+        },
+        {
+          model: EventSectionPrice,
+          as: "sectionPrices",
+        },
+      ],
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: event,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // ─────────────────────────────────────────────
 // ⭐ GET /api/events/:id/booking-layout
 // THIS IS WHAT YOU NEED FOR FRONTEND
@@ -1046,6 +1098,209 @@ exports.getEventBookings = async (req, res) => {
   });
 };
 
+exports.getAssignedEvents = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const where = {};
+
+    if (req.user.role === "ticket_checker") {
+      where.user_id = userId;
+    } else if (req.query.user_id) {
+      where.user_id = Number(req.query.user_id);
+    }
+
+    const assignments = await EventTicketAssignment.findAll({
+      where,
+      include: [
+        {
+          model: Event,
+          as: "event",
+          include: [
+            {
+              model: Hall,
+              as: "hall",
+            },
+            {
+              model: Category,
+            },
+            {
+              model: User,
+              as: "organizer",
+            },
+          ],
+        },
+      ],
+      order: [["assigned_at", "DESC"]],
+    });
+
+    return res.json({
+      success: true,
+      data: assignments.map((item) => item.event).filter(Boolean),
+    });
+  } catch (error) {
+    console.error("Get Assigned Events Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
+};
+
+exports.assignTicketCheckerToEvent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id is required",
+      });
+    }
+
+    const event = await Event.findByPk(id);
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
+    }
+
+    const user = await User.findByPk(user_id);
+    if (!user || user.role !== "ticket_checker") {
+      return res.status(400).json({
+        success: false,
+        message: "Assigned user must have role ticket_checker",
+      });
+    }
+
+    const [assignment] = await EventTicketAssignment.findOrCreate({
+      where: {
+        event_id: id,
+        user_id,
+      },
+      defaults: {
+        event_id: id,
+        user_id,
+        assigned_by: req.user.id,
+      },
+    });
+
+    return res.json({
+      success: true,
+      data: assignment,
+    });
+  } catch (error) {
+    console.error("Assign Ticket Checker Event Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
+};
+
+exports.unassignTicketCheckerFromEvent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id is required",
+      });
+    }
+
+    await EventTicketAssignment.destroy({
+      where: {
+        event_id: id,
+        user_id,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: "Ticket checker unassigned from event",
+    });
+  } catch (error) {
+    console.error("Unassign Ticket Checker Event Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
+};
+
+exports.scanEventTicket = async (req, res) => {
+  try {
+    const { barcode } = req.body;
+
+    if (!barcode || typeof barcode !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "barcode is required",
+      });
+    }
+
+    const booking = await Booking.findOne({
+      where: {
+        booking_ref: barcode,
+      },
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Ticket not found",
+      });
+    }
+
+    if (booking.status !== "confirmed") {
+      return res.status(400).json({
+        success: false,
+        message: "Ticket is not confirmed",
+      });
+    }
+
+    if (req.user.role === "ticket_checker") {
+      const assignment = await EventTicketAssignment.findOne({
+        where: {
+          user_id: req.user.id,
+          event_id: booking.event_id,
+        },
+      });
+
+      if (!assignment) {
+        return res.status(403).json({
+          success: false,
+          message: "This ticket is not assigned to you",
+        });
+      }
+    }
+
+    const scan = await EventTicketScan.create({
+      booking_id: booking.id,
+      event_id: booking.event_id,
+      scanned_by: req.user.id,
+      barcode,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        booking,
+        scan,
+      },
+    });
+  } catch (error) {
+    console.error("Scan Event Ticket Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
+};
+
 // ─────────────────────────────────────────────
 // POST /api/events
 // ─────────────────────────────────────────────
@@ -1106,8 +1361,81 @@ exports.getEventBookings = async (req, res) => {
 //     });
 //   }
 // };
+// exports.createEvent = async (req, res) => {
+//   const t = await sequelize.transaction();
+//   try {
+//     const {
+//       organizer_id,
+//       hall_id,
+//       category_id,
+//       title,
+//       description,
+//       event_date,
+//       start_time,
+//       end_time,
+//       city,
+//       address,
+//       ticket_price = 0,
+//       total_tickets = 0,
+//       is_free = false,
+//       section_prices = [], // [{ section_label, price }]
+//     } = req.body;
+
+//     const slug =
+//       title
+//         .toLowerCase()
+//         .trim()
+//         .replace(/\s+/g, "-")
+//         .replace(/[^a-z0-9-]/g, "") +
+//       "-" +
+//       Date.now();
+
+//     const event = await Event.create(
+//       {
+//         organizer_id: req.user?.id || organizer_id,
+//         hall_id,
+//         category_id,
+//         title,
+//         slug,
+//         description,
+//         event_date,
+//         start_time,
+//         end_time,
+//         city,
+//         address,
+//         ticket_price,
+//         total_tickets,
+//         is_free,
+//         status: "approved",
+//       },
+//       { transaction: t },
+//     );
+
+//     // Save per-section prices if provided
+//     if (section_prices.length > 0) {
+//       await EventSectionPrice.bulkCreate(
+//         section_prices.map((sp) => ({
+//           event_id: event.id,
+//           section_label: sp.section_label,
+//           price: Number(sp.price) || 0,
+//         })),
+//         { transaction: t },
+//       );
+//     }
+
+//     await t.commit();
+//     return res
+//       .status(201)
+//       .json({ success: true, message: "Event created", data: event });
+//   } catch (error) {
+//     await t.rollback();
+//     return res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
 exports.createEvent = async (req, res) => {
   const t = await sequelize.transaction();
+
   try {
     const {
       organizer_id,
@@ -1123,18 +1451,29 @@ exports.createEvent = async (req, res) => {
       ticket_price = 0,
       total_tickets = 0,
       is_free = false,
-      section_prices = [], // [{ section_label, price }]
+      is_trending = false,
+      language,
+      event_type,
+      status = "approved",
+      published_at = null,
+      rejection_reason = null,
+      section_prices = [],
     } = req.body;
 
+    // Uploaded banner image
+    const banner_url = req.file ? `/uploads/events/${req.file.filename}` : null;
+
+    // Slug
     const slug =
       title
-        .toLowerCase()
+        ?.toLowerCase()
         .trim()
         .replace(/\s+/g, "-")
         .replace(/[^a-z0-9-]/g, "") +
       "-" +
       Date.now();
 
+    // Create event
     const event = await Event.create(
       {
         organizer_id: req.user?.id || organizer_id,
@@ -1148,16 +1487,22 @@ exports.createEvent = async (req, res) => {
         end_time,
         city,
         address,
+        banner_url,
         ticket_price,
         total_tickets,
         is_free,
-        status: "approved",
+        is_trending,
+        language,
+        event_type,
+        status,
+        published_at,
+        rejection_reason,
       },
       { transaction: t },
     );
 
-    // Save per-section prices if provided
-    if (section_prices.length > 0) {
+    // Section prices
+    if (Array.isArray(section_prices) && section_prices.length > 0) {
       await EventSectionPrice.bulkCreate(
         section_prices.map((sp) => ({
           event_id: event.id,
@@ -1169,12 +1514,43 @@ exports.createEvent = async (req, res) => {
     }
 
     await t.commit();
-    return res
-      .status(201)
-      .json({ success: true, message: "Event created", data: event });
+
+    // Fetch full event
+    const createdEvent = await Event.findByPk(event.id, {
+      include: [
+        {
+          model: User,
+          as: "organizer",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name"],
+        },
+        {
+          model: Hall,
+          as: "hall",
+          attributes: ["id", "name", "city"],
+        },
+        {
+          model: EventSectionPrice,
+          as: "sectionPrices",
+        },
+      ],
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Event created successfully",
+      data: createdEvent,
+    });
   } catch (error) {
     await t.rollback();
-    return res.status(500).json({ success: false, message: error.message });
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 // ─────────────────────────────────────────────
@@ -1205,42 +1581,160 @@ exports.createEvent = async (req, res) => {
 //   }
 // };
 
+// exports.updateEvent = async (req, res) => {
+//   const t = await sequelize.transaction();
+//   try {
+//     const event = await Event.findByPk(req.params.id);
+//     if (!event) {
+//       await t.rollback();
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "Event not found" });
+//     }
+
+//     const { section_prices = [], ...eventData } = req.body;
+
+//     await event.update(eventData, { transaction: t });
+
+//     // Update section prices — delete old, insert new
+//     if (section_prices.length > 0) {
+//       await EventSectionPrice.destroy({
+//         where: { event_id: event.id },
+//         transaction: t,
+//       });
+//       await EventSectionPrice.bulkCreate(
+//         section_prices.map((sp) => ({
+//           event_id: event.id,
+//           section_label: sp.section_label,
+//           price: Number(sp.price) || 0,
+//         })),
+//         { transaction: t },
+//       );
+//     }
+
+//     await t.commit();
+//     return res.json({ success: true, message: "Event updated" });
+//   } catch (error) {
+//     await t.rollback();
+//     return res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
+const fs = require("fs");
+const path = require("path");
+
 exports.updateEvent = async (req, res) => {
   const t = await sequelize.transaction();
+
   try {
     const event = await Event.findByPk(req.params.id);
+
     if (!event) {
       await t.rollback();
-      return res
-        .status(404)
-        .json({ success: false, message: "Event not found" });
+
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
     }
 
-    const { section_prices = [], ...eventData } = req.body;
+    const { title, section_prices, ...eventData } = req.body;
 
-    await event.update(eventData, { transaction: t });
+    // Update slug if title changed
+    if (title && title !== event.title) {
+      eventData.title = title;
 
-    // Update section prices — delete old, insert new
-    if (section_prices.length > 0) {
+      eventData.slug =
+        title
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "") +
+        "-" +
+        Date.now();
+    }
+
+    // Handle new uploaded banner
+    if (req.file) {
+      // Delete old image
+      if (event.banner_url) {
+        const oldImagePath = path.join(__dirname, "../../", event.banner_url);
+
+        if (fs.existsSync(oldImagePath)) {
+          fs.unlinkSync(oldImagePath);
+        }
+      }
+
+      // Save new image path
+      eventData.banner_url = `/uploads/events/${req.file.filename}`;
+    }
+
+    // Update event
+    await event.update(eventData, {
+      transaction: t,
+    });
+
+    // Update section prices
+    if (Array.isArray(section_prices)) {
+      // Delete old
       await EventSectionPrice.destroy({
-        where: { event_id: event.id },
+        where: {
+          event_id: event.id,
+        },
         transaction: t,
       });
-      await EventSectionPrice.bulkCreate(
-        section_prices.map((sp) => ({
-          event_id: event.id,
-          section_label: sp.section_label,
-          price: Number(sp.price) || 0,
-        })),
-        { transaction: t },
-      );
+
+      // Insert new
+      if (section_prices.length > 0) {
+        await EventSectionPrice.bulkCreate(
+          section_prices.map((sp) => ({
+            event_id: event.id,
+            section_label: sp.section_label,
+            price: Number(sp.price) || 0,
+          })),
+          { transaction: t },
+        );
+      }
     }
 
     await t.commit();
-    return res.json({ success: true, message: "Event updated" });
+
+    // Fetch updated event
+    const updatedEvent = await Event.findByPk(event.id, {
+      include: [
+        {
+          model: User,
+          as: "organizer",
+          attributes: ["id", "name", "email"],
+        },
+        {
+          model: Category,
+          attributes: ["id", "name"],
+        },
+        {
+          model: Hall,
+          as: "hall",
+          attributes: ["id", "name", "city"],
+        },
+        {
+          model: EventSectionPrice,
+          as: "sectionPrices",
+        },
+      ],
+    });
+
+    return res.json({
+      success: true,
+      message: "Event updated successfully",
+      data: updatedEvent,
+    });
   } catch (error) {
     await t.rollback();
-    return res.status(500).json({ success: false, message: error.message });
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 // ─────────────────────────────────────────────

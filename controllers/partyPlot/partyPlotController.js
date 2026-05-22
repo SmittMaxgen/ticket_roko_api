@@ -4,6 +4,7 @@ const {
   PartyPlot,
   PartyPlotTicket,
   PartyPlotBooking,
+  PartyPlotTicketAssignment,
   User,
 } = require("../../models");
 
@@ -382,6 +383,133 @@ exports.bookTickets = async (req, res) => {
   }
 };
 
+exports.getAssignedPartyPlots = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const where = {};
+
+    if (req.user.role === "ticket_checker") {
+      where.user_id = userId;
+    } else if (req.query.user_id) {
+      where.user_id = Number(req.query.user_id);
+    }
+
+    const assignments = await PartyPlotTicketAssignment.findAll({
+      where,
+      include: [
+        {
+          model: PartyPlot,
+          as: "partyPlot",
+          include: [
+            {
+              model: User,
+              as: "creator",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+      ],
+      order: [["assigned_at", "DESC"]],
+    });
+
+    return res.json({
+      success: true,
+      data: assignments.map((item) => item.partyPlot).filter(Boolean),
+    });
+  } catch (error) {
+    console.error("Get Assigned Party Plots Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
+};
+
+exports.assignTicketCheckerToPartyPlot = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id is required",
+      });
+    }
+
+    const partyPlot = await PartyPlot.findByPk(id);
+    if (!partyPlot) {
+      return res.status(404).json({
+        success: false,
+        message: "Party plot not found",
+      });
+    }
+
+    const user = await User.findByPk(user_id);
+    if (!user || user.role !== "ticket_checker") {
+      return res.status(400).json({
+        success: false,
+        message: "Assigned user must have role ticket_checker",
+      });
+    }
+
+    const [assignment] = await PartyPlotTicketAssignment.findOrCreate({
+      where: {
+        party_plot_id: id,
+        user_id,
+      },
+      defaults: {
+        party_plot_id: id,
+        user_id,
+        assigned_by: req.user.id,
+      },
+    });
+
+    return res.json({
+      success: true,
+      data: assignment,
+    });
+  } catch (error) {
+    console.error("Assign Ticket Checker Party Plot Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
+};
+
+exports.unassignTicketCheckerFromPartyPlot = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id is required",
+      });
+    }
+
+    await PartyPlotTicketAssignment.destroy({
+      where: {
+        party_plot_id: id,
+        user_id,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: "Ticket checker unassigned from party plot",
+    });
+  } catch (error) {
+    console.error("Unassign Ticket Checker Party Plot Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
+};
+
 // POST /api/party-plots/scan-ticket
 exports.scanTicket = async (req, res) => {
   try {
@@ -413,6 +541,22 @@ exports.scanTicket = async (req, res) => {
         success: false,
         message: "Ticket not found",
       });
+    }
+
+    if (req.user.role === "ticket_checker") {
+      const assignment = await PartyPlotTicketAssignment.findOne({
+        where: {
+          user_id: req.user.id,
+          party_plot_id: ticket.party_plot_id,
+        },
+      });
+
+      if (!assignment) {
+        return res.status(403).json({
+          success: false,
+          message: "This ticket is not assigned to you",
+        });
+      }
     }
 
     if (ticket.status !== "booked") {
