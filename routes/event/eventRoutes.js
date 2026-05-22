@@ -63,7 +63,12 @@ router.get("/:id/booking-layout", getBookingLayout);
 
 router.patch("/:hallId/seats/label", updateSeatLabels);
 
-router.get("/:id/bookings", getEventBookings);
+router.get(
+  "/:id/bookings",
+  auth,
+  role("super_admin", "admin", "ticket_checker"),
+  getEventBookings,
+);
 
 /* ADMIN */
 

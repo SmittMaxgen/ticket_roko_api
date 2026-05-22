@@ -8,7 +8,13 @@ const BookingSeat = require("../../models/booking/BookingSeatModel");
 const HallSeat = require("../../models/hall/HallSeatModel");
 const HallRow = require("../../models/hall/HallRowModel");
 const HallSection = require("../../models/hall/HallSectionsModel");
-const { sequelize, Seat, Hall, EventSectionPrice } = require("../../models");
+const {
+  sequelize,
+  Seat,
+  Hall,
+  EventSectionPrice,
+  EventTicketAssignment,
+} = require("../../models");
 
 const bookingInclude = [
   {
@@ -259,6 +265,40 @@ exports.getAllBookings = async (req, res) => {
     if (search) {
       where.booking_ref = { [Op.like]: `%${search}%` };
       userWhere.name = { [Op.like]: `%${search}%` };
+    }
+
+    if (req.user.role === "ticket_checker") {
+      const assignments = await EventTicketAssignment.findAll({
+        where: { user_id: req.user.id },
+        attributes: ["event_id"],
+      });
+      const assignedEventIds = assignments.map((item) => item.event_id);
+
+      if (!assignedEventIds.length) {
+        return res.json({
+          success: true,
+          data: [],
+          total: 0,
+          page: Number(page),
+          limit: Number(limit),
+        });
+      }
+
+      if (event_id) {
+        const requestedEventId = Number(event_id);
+        if (!assignedEventIds.includes(requestedEventId)) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Access denied. Event not assigned to this ticket checker.",
+          });
+        }
+        where.event_id = requestedEventId;
+      } else {
+        where.event_id = assignedEventIds;
+      }
+    } else if (event_id) {
+      where.event_id = event_id;
     }
 
     const { rows, count } = await Booking.findAndCountAll({

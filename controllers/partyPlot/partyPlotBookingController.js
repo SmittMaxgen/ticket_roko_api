@@ -5,6 +5,7 @@ const {
   PartyPlotTicket,
   PartyPlotBooking,
   User,
+  PartyPlotTicketAssignment,
 } = require("../../models");
 
 /* =========================================================
@@ -40,6 +41,41 @@ exports.getBookings = async (req, res) => {
           },
         },
       ];
+    }
+
+    if (req.user.role === "user") {
+      where.user_id = req.user.id;
+    }
+
+    if (req.user.role === "ticket_checker") {
+      const assignments = await PartyPlotTicketAssignment.findAll({
+        where: { user_id: req.user.id },
+        attributes: ["party_plot_id"],
+      });
+      const assignedPlotIds = assignments.map((item) => item.party_plot_id);
+
+      if (req.query.party_plot_id) {
+        const requestedPlotId = Number(req.query.party_plot_id);
+        if (!assignedPlotIds.includes(requestedPlotId)) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Access denied. Party plot not assigned to this ticket checker.",
+          });
+        }
+        where.party_plot_id = requestedPlotId;
+      } else {
+        if (!assignedPlotIds.length) {
+          return res.status(200).json({
+            success: true,
+            data: [],
+            total: 0,
+            currentPage: page,
+            totalPages: 0,
+          });
+        }
+        where.party_plot_id = assignedPlotIds;
+      }
     }
 
     const { rows, count } = await PartyPlotBooking.findAndCountAll({
@@ -121,14 +157,29 @@ exports.getBookingById = async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-
         message: "Booking not found",
       });
     }
 
+    if (req.user.role === "ticket_checker") {
+      const assignment = await PartyPlotTicketAssignment.findOne({
+        where: {
+          party_plot_id: booking.party_plot_id,
+          user_id: req.user.id,
+        },
+      });
+
+      if (!assignment) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Access denied. Booking belongs to a party plot not assigned to this ticket checker.",
+        });
+      }
+    }
+
     return res.status(200).json({
       success: true,
-
       data: booking,
     });
   } catch (error) {

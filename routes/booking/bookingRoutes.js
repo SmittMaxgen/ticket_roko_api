@@ -12,7 +12,12 @@ const adminOnly = role("super_admin", "admin");
 router.post("/create", auth, controller.createBooking);
 router.get("/my-bookings", auth, controller.getMyBookings);
 router.get("/:id", auth, controller.getBookingById);
-router.get("/", controller.getAllBookings);
+router.get(
+  "/",
+  auth,
+  role("super_admin", "admin", "ticket_checker"),
+  controller.getAllBookings,
+);
 
 router.get("/stats/summary", controller.getBookingStats);
 router.patch("/:id/cancel", controller.cancelBooking);

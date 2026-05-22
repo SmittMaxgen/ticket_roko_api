@@ -1156,17 +1156,41 @@ exports.getBookingLayout = async (req, res) => {
   }
 };
 exports.getEventBookings = async (req, res) => {
-  const eventId = req.params.id;
+  try {
+    const eventId = req.params.id;
 
-  const bookings = await Booking.findAll({
-    where: { event_id: eventId },
-    order: [["booked_at", "DESC"]], // ✅ FIXED
-  });
+    if (req.user.role === "ticket_checker") {
+      const assignment = await EventTicketAssignment.findOne({
+        where: {
+          event_id: eventId,
+          user_id: req.user.id,
+        },
+      });
 
-  res.json({
-    success: true,
-    data: bookings,
-  });
+      if (!assignment) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Event not assigned to this ticket checker.",
+        });
+      }
+    }
+
+    const bookings = await Booking.findAll({
+      where: { event_id: eventId },
+      order: [["booked_at", "DESC"]],
+    });
+
+    return res.json({
+      success: true,
+      data: bookings,
+    });
+  } catch (error) {
+    console.error("Get Event Bookings Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+    });
+  }
 };
 
 exports.getAssignedEvents = async (req, res) => {
