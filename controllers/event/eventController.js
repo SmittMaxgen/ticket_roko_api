@@ -665,6 +665,58 @@ exports.getTrendingEvents = async (req, res) => {
     });
   }
 };
+
+exports.getTrendingEventByIdOrSlug = async (req, res) => {
+  try {
+    const value = req.params.id;
+
+    const where = isNaN(value)
+      ? {
+          slug: value,
+          is_trending: true,
+          status: "approved",
+        }
+      : {
+          [Op.and]: [
+            {
+              is_trending: true,
+              status: "approved",
+            },
+            {
+              [Op.or]: [{ id: Number(value) }, { slug: value }],
+            },
+          ],
+        };
+
+    const event = await Event.findOne({
+      where,
+      include: [
+        ...baseInclude,
+        {
+          model: EventSectionPrice,
+          as: "sectionPrices",
+        },
+      ],
+    });
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Trending event not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: event,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 // ─────────────────────────────────────────────
 // GET /api/events/:id
 // BASIC EVENT DETAIL
@@ -696,22 +748,41 @@ exports.getTrendingEvents = async (req, res) => {
 
 exports.getEventById = async (req, res) => {
   try {
-    const event = await Event.findByPk(req.params.id, {
+    const value = req.params.id;
+
+    const where = isNaN(value)
+      ? { slug: value }
+      : {
+          [Op.or]: [{ id: Number(value) }, { slug: value }],
+        };
+
+    const event = await Event.findOne({
+      where,
       include: [
         ...baseInclude,
-        { model: EventSectionPrice, as: "sectionPrices" },
+        {
+          model: EventSectionPrice,
+          as: "sectionPrices",
+        },
       ],
     });
 
     if (!event) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Event not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Event not found",
+      });
     }
 
-    return res.json({ success: true, data: event });
+    return res.json({
+      success: true,
+      data: event,
+    });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 

@@ -385,15 +385,15 @@ exports.bookTickets = async (req, res) => {
 
 exports.getAssignedPartyPlots = async (req, res) => {
   try {
-    const userId = req.user.id;
+    console.log("req.user====>>>>", req.user);
+    const userId = req?.user?.id;
     const where = {};
-
     if (req.user.role === "ticket_checker") {
       where.user_id = userId;
     } else if (req.query.user_id) {
       where.user_id = Number(req.query.user_id);
     }
-
+    console.log("req.user.role====>>>>", req.user.role);
     const assignments = await PartyPlotTicketAssignment.findAll({
       where,
       include: [

@@ -29,6 +29,7 @@ const {
   unassignTicketCheckerFromEvent,
   scanEventTicket,
   getEventBySlug,
+  getTrendingEventByIdOrSlug,
 } = require("../../controllers/event/eventController");
 
 const { updateSeatLabels } = require("../../controllers/hall/hallController");
@@ -37,6 +38,8 @@ const { updateSeatLabels } = require("../../controllers/hall/hallController");
 router.get("/", getAllEvents);
 
 router.get("/trending", getTrendingEvents);
+
+router.get("/trending/:id", getTrendingEventByIdOrSlug);
 
 router.get(
   "/assigned",
