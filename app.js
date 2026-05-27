@@ -22,7 +22,7 @@
 // })();
 
 // app.js
-  
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -49,7 +49,29 @@ app.use("/api", router);
 (async () => {
   await connectDB();
 
-  app.listen(port, () => {
+  const http = require("http");
+  const { Server } = require("socket.io");
+
+  const server = http.createServer(app);
+
+  const io = new Server(server, {
+    cors: { origin: "*", methods: ["GET", "POST"] },
+  });
+
+  io.on("connection", (socket) => {
+    socket.on("join:event", (eventId) => {
+      socket.join(`event:${eventId}`);
+      console.log(`Socket ${socket.id} joined event room: event:${eventId}`);
+    });
+    socket.on("leave:event", (eventId) => {
+      socket.leave(`event:${eventId}`);
+      console.log(`Socket ${socket.id} left event room: event:${eventId}`);
+    });
+  });
+
+  app.set("io", io); // make io accessible in controllers
+
+  server.listen(port, () => {
     console.log(`🚀 App running on http://localhost:${port}`);
   });
 })();

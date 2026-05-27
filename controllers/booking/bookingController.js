@@ -204,6 +204,15 @@ exports.createBooking = async (req, res) => {
 
     await t.commit();
 
+    // 🔴 Real-time: push booked seats to all clients on this event
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`event:${event_id}`).emit("seats:booked", {
+        event_id,
+        seat_ids,
+      });
+    }
+
     return res.json({
       success: true,
       message: "Booking created successfully",
