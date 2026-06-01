@@ -49,6 +49,7 @@ router.use("/vendor", require("./vendor/vendorRoutes"));
 
 /* Party Plots */
 router.use("/party-plots", require("./partyPlot/partyPlotRoutes"));
+/* Party Plots Bookings*/
 router.use(
   "/party-plot-bookings",
   require("./partyPlot/partyPlotBookingRoutes"),
@@ -62,5 +63,8 @@ router.use("/tools", require("./optionsRoutes/optionsRoutes"));
 
 /* Labels */
 router.use("/labels", require("./label/labelRoutes"));
+
+/* Advertisements */
+router.use("/advertisements", require("./advertisement/advertisementRoutes"));
 
 module.exports = router;
