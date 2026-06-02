@@ -4,6 +4,7 @@ const path = require("path");
 const router = express.Router();
 
 const auth = require("../../middleware/auth");
+const jwt = require("jsonwebtoken");
 const role = require("../../middleware/role");
 
 // Upload middleware
@@ -36,7 +37,29 @@ const {
 const { updateSeatLabels } = require("../../controllers/hall/hallController");
 
 /* PUBLIC / BASIC */
-router.get("/", getAllEvents);
+const parseOptionalAuth = (req, res, next) => {
+  try {
+    if (!req.user) {
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      if (authHeader) {
+        let token = authHeader;
+        if (typeof token === "string" && token.startsWith("Bearer ")) {
+          token = token.split(" ")[1];
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded && decoded.id) {
+          req.user = decoded;
+        }
+      }
+    }
+  } catch (error) {
+    // ignore invalid token for public access
+  }
+  next();
+};
+
+router.get("/", parseOptionalAuth, getAllEvents);
 
 router.get("/category/:slug", getEventsByCategory);
 

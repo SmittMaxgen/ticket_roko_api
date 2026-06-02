@@ -451,6 +451,7 @@
 // controllers/event/eventController.js
 
 const { Op } = require("sequelize");
+const jwt = require("jsonwebtoken");
 
 const Event = require("../../models/event/EventModel");
 const User = require("../../models/user/UserModel");
@@ -538,9 +539,34 @@ const baseInclude = [
 //   }
 // };
 
+const decodeAuthToken = (req) => {
+  try {
+    let token = req.headers.authorization || req.headers.Authorization;
+    if (!token) return null;
+
+    if (typeof token === "string" && token.startsWith("Bearer ")) {
+      token = token.split(" ")[1];
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded && decoded.id ? decoded : null;
+  } catch (error) {
+    return null;
+  }
+};
+
 exports.getAllEvents = async (req, res) => {
   try {
-    let { page = 1, limit = 20, status, search, category_id } = req.query;
+    let {
+      page = 1,
+      limit = 20,
+      status,
+      search,
+      category_id,
+      organizer_id,
+      upcoming,
+      period,
+    } = req.query;
 
     page = Number(page);
     limit = Number(limit);
@@ -551,11 +577,62 @@ exports.getAllEvents = async (req, res) => {
 
     if (status) where.status = status;
     if (category_id) where.category_id = Number(category_id);
+    if (organizer_id) {
+      const orgId = Number(organizer_id);
+      if (!Number.isNaN(orgId)) {
+        where.organizer_id = orgId;
+      }
+    }
 
     if (search) {
       where.title = {
         [Op.like]: `%${search.trim()}%`,
       };
+    }
+
+    const authUser = req.user || decodeAuthToken(req);
+    if (authUser?.role === "vendor_organizer") {
+      where.organizer_id = Number(authUser.id);
+    }
+
+    const periodValue = String(period || upcoming || "").toLowerCase();
+    if (
+      periodValue === "true" ||
+      periodValue === "1" ||
+      periodValue === "upcoming"
+    ) {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const day = String(today.getDate()).padStart(2, "0");
+      const todayDate = `${year}-${month}-${day}`;
+      where.event_date = {
+        [Op.gte]: todayDate,
+      };
+    }
+
+    if (periodValue === "past") {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const day = String(today.getDate()).padStart(2, "0");
+      const todayDate = `${year}-${month}-${day}`;
+      where.event_date = {
+        [Op.lt]: todayDate,
+      };
+    }
+
+    const orderClause = [];
+    if (
+      periodValue === "true" ||
+      periodValue === "1" ||
+      periodValue === "upcoming"
+    ) {
+      orderClause.push(["event_date", "ASC"], ["start_time", "ASC"]);
+    } else if (periodValue === "past") {
+      orderClause.push(["event_date", "DESC"], ["start_time", "DESC"]);
+    } else {
+      orderClause.push(["created_at", "DESC"]);
     }
 
     const { rows, count } = await Event.findAndCountAll({
@@ -575,7 +652,7 @@ exports.getAllEvents = async (req, res) => {
         },
       ],
 
-      order: [["created_at", "DESC"]],
+      order: orderClause,
       limit,
       offset,
       distinct: true,
@@ -1814,6 +1891,24 @@ exports.updateEvent = async (req, res) => {
     }
 
     const { title, section_prices, ...eventData } = req.body;
+
+    const allowedStatuses = [
+      "draft",
+      "pending_approval",
+      "approved",
+      "rejected",
+      "cancelled",
+      "completed",
+    ];
+
+    if (Object.prototype.hasOwnProperty.call(eventData, "status")) {
+      const statusValue = String(eventData.status || "").trim();
+      if (!allowedStatuses.includes(statusValue)) {
+        delete eventData.status;
+      } else {
+        eventData.status = statusValue;
+      }
+    }
 
     // Update slug if title changed
     if (title && title !== event.title) {
