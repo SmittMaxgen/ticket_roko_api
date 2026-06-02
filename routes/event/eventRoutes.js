@@ -30,12 +30,15 @@ const {
   scanEventTicket,
   getEventBySlug,
   getTrendingEventByIdOrSlug,
+  getEventsByCategory,
 } = require("../../controllers/event/eventController");
 
 const { updateSeatLabels } = require("../../controllers/hall/hallController");
 
 /* PUBLIC / BASIC */
 router.get("/", getAllEvents);
+
+router.get("/category/:slug", getEventsByCategory);
 
 router.get("/trending", getTrendingEvents);
 

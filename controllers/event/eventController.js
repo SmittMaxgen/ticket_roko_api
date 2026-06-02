@@ -601,6 +601,86 @@ exports.getAllEvents = async (req, res) => {
   }
 };
 
+// Get events by category slug
+exports.getEventsByCategory = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    let { page = 1, limit = 20, status, search } = req.query;
+
+    page = Number(page);
+    limit = Number(limit);
+    const offset = (page - 1) * limit;
+
+    // First, find the category by slug
+    const category = await Category.findOne({
+      where: { slug: slug.toLowerCase().trim() },
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    // Build where condition for events
+    const where = {
+      category_id: category.id,
+    };
+
+    if (status) where.status = status;
+
+    if (search) {
+      where.title = {
+        [Op.like]: `%${search.trim()}%`,
+      };
+    }
+
+    const { rows, count } = await Event.findAndCountAll({
+      where,
+      include: [
+        {
+          model: Hall,
+          as: "hall",
+        },
+        {
+          model: Category,
+        },
+        {
+          model: User,
+          as: "organizer",
+        },
+      ],
+      order: [["created_at", "DESC"]],
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    return res.json({
+      success: true,
+      data: rows,
+      category: {
+        id: category.id,
+        name: category.name,
+        slug: category.slug,
+      },
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 exports.getTrendingEvents = async (req, res) => {
   try {
     let { page = 1, limit = 10, category_id } = req.query;
