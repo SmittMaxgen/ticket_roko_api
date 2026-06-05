@@ -32,6 +32,8 @@ const {
   getEventBySlug,
   getTrendingEventByIdOrSlug,
   getEventsByCategory,
+  getEventsByCity,
+  getEventsByLanguage,
 } = require("../../controllers/event/eventController");
 
 const { updateSeatLabels } = require("../../controllers/hall/hallController");
@@ -62,6 +64,10 @@ const parseOptionalAuth = (req, res, next) => {
 router.get("/", parseOptionalAuth, getAllEvents);
 
 router.get("/category/:slug", getEventsByCategory);
+
+router.get("/city/:slug", getEventsByCity);
+
+router.get("/language/:slug", getEventsByLanguage);
 
 router.get("/trending", getTrendingEvents);
 

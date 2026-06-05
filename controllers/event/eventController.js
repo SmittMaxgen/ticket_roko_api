@@ -566,6 +566,10 @@ exports.getAllEvents = async (req, res) => {
       organizer_id,
       upcoming,
       period,
+      startDate,
+      endDate,
+      minPrice,
+      maxPrice,
     } = req.query;
 
     page = Number(page);
@@ -595,35 +599,97 @@ exports.getAllEvents = async (req, res) => {
       where.organizer_id = Number(authUser.id);
     }
 
-    const periodValue = String(period || upcoming || "").toLowerCase();
-    if (
-      periodValue === "true" ||
-      periodValue === "1" ||
-      periodValue === "upcoming"
-    ) {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, "0");
-      const day = String(today.getDate()).padStart(2, "0");
-      const todayDate = `${year}-${month}-${day}`;
-      where.event_date = {
-        [Op.gte]: todayDate,
-      };
+    // Price range filtering
+    if (minPrice || maxPrice) {
+      where.ticket_price = {};
+
+      if (minPrice) {
+        const minPriceNum = Number(minPrice);
+        if (isNaN(minPriceNum) || minPriceNum < 0) {
+          return res.status(400).json({
+            success: false,
+            message: "minPrice must be a non-negative number",
+          });
+        }
+        where.ticket_price[Op.gte] = minPriceNum;
+      }
+
+      if (maxPrice) {
+        const maxPriceNum = Number(maxPrice);
+        if (isNaN(maxPriceNum) || maxPriceNum < 0) {
+          return res.status(400).json({
+            success: false,
+            message: "maxPrice must be a non-negative number",
+          });
+        }
+        where.ticket_price[Op.lte] = maxPriceNum;
+      }
     }
 
-    if (periodValue === "past") {
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, "0");
-      const day = String(today.getDate()).padStart(2, "0");
-      const todayDate = `${year}-${month}-${day}`;
-      where.event_date = {
-        [Op.lt]: todayDate,
-      };
+    // Date range filtering (takes precedence over period)
+    if (startDate || endDate) {
+      where.event_date = {};
+
+      if (startDate) {
+        // Validate date format
+        const start = new Date(startDate);
+        if (isNaN(start.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid startDate format. Use YYYY-MM-DD",
+          });
+        }
+        where.event_date[Op.gte] = startDate;
+      }
+
+      if (endDate) {
+        // Validate date format
+        const end = new Date(endDate);
+        if (isNaN(end.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid endDate format. Use YYYY-MM-DD",
+          });
+        }
+        where.event_date[Op.lte] = endDate;
+      }
+    } else {
+      // Period-based filtering (only if no date range provided)
+      const periodValue = String(period || upcoming || "").toLowerCase();
+      if (
+        periodValue === "true" ||
+        periodValue === "1" ||
+        periodValue === "upcoming"
+      ) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, "0");
+        const day = String(today.getDate()).padStart(2, "0");
+        const todayDate = `${year}-${month}-${day}`;
+        where.event_date = {
+          [Op.gte]: todayDate,
+        };
+      }
+
+      if (periodValue === "past") {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, "0");
+        const day = String(today.getDate()).padStart(2, "0");
+        const todayDate = `${year}-${month}-${day}`;
+        where.event_date = {
+          [Op.lt]: todayDate,
+        };
+      }
     }
 
     const orderClause = [];
-    if (
+    const periodValue = String(period || upcoming || "").toLowerCase();
+
+    if (startDate || endDate) {
+      // For date range queries, sort by date ascending
+      orderClause.push(["event_date", "ASC"], ["start_time", "ASC"]);
+    } else if (
       periodValue === "true" ||
       periodValue === "1" ||
       periodValue === "upcoming"
@@ -755,6 +821,128 @@ exports.getEventsByCategory = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+/* GET EVENTS BY CITY */
+exports.getEventsByCity = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    let { page = 1, limit = 20, status, search } = req.query;
+
+    page = Number(page);
+    limit = Number(limit);
+    const offset = (page - 1) * limit;
+
+    const city = await City.findOne({
+      where: { slug: slug.toLowerCase().trim() },
+    });
+
+    if (!city) {
+      return res.status(404).json({
+        success: false,
+        message: "City not found",
+      });
+    }
+
+    const where = {
+      city: { [Op.like]: `%${city.name}%` }, // ← string field match
+    };
+
+    if (status) where.status = status;
+    if (search) {
+      where.title = { [Op.like]: `%${search.trim()}%` };
+    }
+
+    const { rows, count } = await Event.findAndCountAll({
+      where,
+      include: [
+        { model: Hall, as: "hall" },
+        { model: Category },
+        { model: User, as: "organizer" },
+      ],
+      order: [["created_at", "DESC"]],
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    return res.json({
+      success: true,
+      data: rows,
+      city: {
+        id: city.id,
+        name: city.name,
+        slug: city.slug,
+        state: city.state,
+      },
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/* GET EVENTS BY LANGUAGE */
+exports.getEventsByLanguage = async (req, res) => {
+  try {
+    // grab whatever they pass — "English", "english", "hindi"
+    const language = req.params.slug.trim();
+    let { page = 1, limit = 20, status, search } = req.query;
+
+    page = Number(page);
+    limit = Number(limit);
+    const offset = (page - 1) * limit;
+
+    const where = {
+      language: { [Op.like]: language }, // case-insensitive-ish match
+    };
+
+    if (status) where.status = status;
+    if (search) {
+      where.title = { [Op.like]: `%${search.trim()}%` };
+    }
+
+    const { rows, count } = await Event.findAndCountAll({
+      where,
+      include: [
+        { model: Hall, as: "hall" },
+        { model: Category },
+        { model: User, as: "organizer" },
+      ],
+      order: [["created_at", "DESC"]],
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    if (count === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No events found for language: ${language}`,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: rows,
+      language,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -1874,6 +2062,8 @@ exports.createEvent = async (req, res) => {
 
 const fs = require("fs");
 const path = require("path");
+const Language = require("../../models/language/LanguageModel");
+const City = require("../../models/city/cityModel");
 
 exports.updateEvent = async (req, res) => {
   const t = await sequelize.transaction();

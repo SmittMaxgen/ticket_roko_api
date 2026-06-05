@@ -67,4 +67,10 @@ router.use("/labels", require("./label/labelRoutes"));
 /* Advertisements */
 router.use("/advertisements", require("./advertisement/advertisementRoutes"));
 
+/* City */
+router.use("/cities", require("./city/cityRoutes"));
+
+/* Language */
+router.use("/languages", require("./language/languageRoutes"));
+
 module.exports = router;
